@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Cenário de teste</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/scene.css">
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+
+  <aside id="cp">
+    <h1>Cenário</h1>
+    <section><h2>Hora do dia</h2><div id="sPreset" class="seg"></div></section>
+    <section><h2>Tempo</h2>
+      <div class="toggles">
+        <button id="tRain" class="tog" aria-pressed="false">Chuva <kbd>R</kbd></button>
+      </div>
+      <label class="rng">Vento <input type="range" id="rWind" min="0" max="2" step="0.05" value="1"></label>
+    </section>
+    <section><h2>Câmera</h2><div id="sCam" class="seg"></div></section>
+    <section><h2>Qualidade</h2>
+      <label class="rng">Alcance das árvores <input type="range" id="rRange" min="50" max="500" step="5" value="400"><span id="vRange">400 m</span></label>
+      <div class="seg" id="sDens"></div>
+      <div class="toggles">
+        <button id="tGrass" class="tog" aria-pressed="true">Grama</button>
+        <button id="tShadow" class="tog" aria-pressed="true">Sombras</button>
+      </div>
+    </section>
+  </aside>
+
+  <div id="speed"><b id="kmh">0</b> km/h</div>
+  <div id="hint">C troca a câmera · 1–4 hora do dia · R chuva · F estatísticas</div>
+  <div id="stats" hidden></div>
+  <div id="loading"><span id="loadText">Carregando…</span></div>
+
+  <script type="module" src="src/sceneMain.js"></script>
+</body>
+</html>

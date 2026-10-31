@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Corrida</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/start.css">
+  <link rel="stylesheet" href="css/options.css">
+</head>
+<body>
+  <div class="bg"></div><div class="road"></div>
+  <main>
+    <p class="kicker" data-i18n="tagline">Simulador de corrida</p>
+    <h1 data-i18n="appTitle">CORRIDA</h1>
+    <button id="start" class="pri" data-i18n="start">Iniciar</button>
+    <button id="opt" class="optbtn" data-i18n="options">Opções</button>
+    <p class="hint" data-i18n="pressKey">Pressione Enter ou Espaço</p>
+  </main>
+  <script type="module">
+    import { applyI18n } from './src/settings.js';
+    import { openOptions, optionsOpen } from './src/optionsUI.js';
+    import { initUiAudio } from './src/uiaudio.js';
+    applyI18n(); initUiAudio();
+    const $ = (id) => document.getElementById(id);
+    function go() {
+      document.body.classList.add('leaving');
+      setTimeout(() => { location.href = 'garagem.html'; }, 350);
+    }
+    $('start').onclick = go; $('opt').onclick = openOptions;
+    addEventListener('keydown', (e) => { if (optionsOpen() || e.target.tagName === 'SELECT' || (e.target.tagName === 'BUTTON' && e.target.id !== 'start')) return; if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); go(); } });
+  </script>
+</body>
+</html>

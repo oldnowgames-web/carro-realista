@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Corrida</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/scene.css">
+  <link rel="stylesheet" href="css/game.css">
+  <link rel="stylesheet" href="css/options.css">
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <div id="hudbox">
+    <div id="topl"><div id="pos"></div><div id="lap"></div><div id="ltime"></div><div id="lbest"></div><div id="lrec"></div></div>
+    <div id="mirrorFrame"></div>
+    <ol id="board"></ol>
+    <canvas id="mm" width="520" height="520"></canvas>
+    <div id="turn"></div>
+    <div id="delta"></div>
+    <div id="gauge">
+      <span id="kmh">0</span><span class="unit">km/h</span><span id="gear">N</span>
+      <div class="bar"><i id="rpmFill"></i><span id="shiftLight"></span></div>
+      <div class="bar nit"><i id="nitFill"></i></div>
+      <div id="dmg"><span data-i18n="damage">Dano</span><div class="bar dmgbar"><i id="dmgFill"></i></div></div>
+      <div id="flags"></div>
+    </div>
+    <div id="cd"></div>
+    <div id="toast"></div>
+  </div>
+  <div id="startov" class="ovl"><div class="card"><h2 data-i18n="ready2">Pronto para largar</h2>
+    <div class="keys"><b>W / S</b><span data-i18n="kAccel"></span><b>A / D</b><span data-i18n="kSteer"></span><b>Space</b><span data-i18n="kHand"></span><b>Shift</b><span data-i18n="kNitro"></span>
+    <b>E / Q</b><span data-i18n="kGears"></span><b>T</b><span data-i18n="kGear"></span><b>Z · X · V</b><span data-i18n="kAssists"></span>
+    <b>C</b><span data-i18n="kCam"></span><b>B</b><span data-i18n="kMirror"></span><b>R</b><span data-i18n="kReset"></span><b>N</b><span data-i18n="kRestart"></span><b>1–4 · G</b><span data-i18n="kClock"></span><b>M · P</b><span data-i18n="kMute"></span></div>
+    <p data-i18n="padHelp"></p>
+    <div class="row"><button id="go" class="pri" data-i18n="begin">Começar</button><button id="optS" data-i18n="options">Opções</button></div></div></div>
+  <div id="pauseov" class="ovl"><div class="card"><h2 data-i18n="pause">Pausa</h2><div class="row"><button id="resume" class="pri" data-i18n="resume">Continuar</button><button id="restartB" data-i18n="restart">Reiniciar</button><button id="optP" data-i18n="options">Opções</button><a class="btn" href="garagem.html" data-i18n="garage">Garagem</a></div></div></div>
+  <div id="results" class="ovl"></div>
+  <div id="loading"><span id="loadText" data-i18n="loading">Carregando…</span></div>
+  <script type="module" src="src/gameMain.js"></script>
+</body>
+</html>
