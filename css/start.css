@@ -1,0 +1,24 @@
+:root{--spruce:#0f2622;--bone:#e9eee6;--mute:#9fb3a8;--amber:#ffb703;--ember:#ff6a2b}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#0b0f10;color:var(--bone);font:500 15px/1.4 'Barlow',system-ui,sans-serif}
+.bg{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 120%,rgba(255,106,43,.35),transparent 55%),linear-gradient(#0b0f10,#173832 70%,#0f2622)}
+.road{position:fixed;left:0;right:0;bottom:0;height:34vh;background:#101514;transform:perspective(300px) rotateX(38deg);transform-origin:bottom;
+  background-image:repeating-linear-gradient(#101514 0 40px,#1a2220 40px 80px);animation:move 1.2s linear infinite;opacity:.9}
+.road::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:6px;margin-left:-3px;background:repeating-linear-gradient(var(--amber) 0 30px,transparent 30px 60px)}
+@keyframes move{to{background-position:0 80px}}
+main{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:0 16px;text-align:center;transition:opacity .35s,transform .35s}
+.leaving main{opacity:0;transform:scale(1.04)}
+.kicker{margin:0;color:var(--amber);letter-spacing:.35em;text-transform:uppercase;font-weight:600;font-size:13px}
+h1{margin:0;font:700 clamp(64px,14vw,150px)/.9 'Barlow Condensed','Arial Narrow',sans-serif;letter-spacing:4px;text-shadow:0 6px 40px rgba(0,0,0,.6)}
+.opts{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.opts label{display:flex;flex-direction:column;gap:4px;color:var(--mute);font-size:13px;text-align:left}
+select{font:inherit;color:var(--bone);background:rgba(233,238,230,.08);border:1px solid rgba(233,238,230,.2);border-radius:8px;padding:8px 12px;min-width:130px}
+select option{color:#111}
+.pri{font:700 22px 'Barlow Condensed',sans-serif;letter-spacing:2px;text-transform:uppercase;border:0;border-radius:10px;padding:14px 56px;cursor:pointer;color:#2a1d00;background:var(--amber);transition:transform .15s,box-shadow .15s}
+.pri:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(255,183,3,.4)}
+.pri:focus-visible,select:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.hint{margin:0;color:var(--mute);font-size:13px}
+kbd{font:inherit;font-size:12px;border:1px solid rgba(233,238,230,.25);border-radius:4px;padding:1px 6px}
+@media (prefers-reduced-motion:reduce){.road{animation:none}main{transition:none}}
+
+.optbtn{margin-top:-4px}
