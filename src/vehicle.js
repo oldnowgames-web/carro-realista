@@ -5,6 +5,7 @@
 // escorregamento longitudinal (κ) e lateral (α) e uma curva de pneu tipo "Magic Formula" com círculo de atrito (força
 // combinada). Motor com curva de torque, câmbio de marchas, diferencial (aberto/LSD), freio com ABS e controle de tração opcionais.
 import { SPECS } from './carSpecs.js';
+import { stepArcade } from './arcade.js';
 
 const G = 9.81, RHO = 1.2, TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -81,6 +82,7 @@ export class Vehicle {
    * env: { surface(x,z) -> {mu, rr}, heightAt(x,z), wet 0..1 }
    */
   step(dt, inp, env) {
+    if (this.arcade) { stepArcade(this, dt, inp, env); return; }   // direção fácil (arcade.js)
     const S = this.spec, as = this.assist;
     const u = this.u, v = this.v, r = this.r, sp = Math.hypot(u, v);
     this.speed = u;
@@ -186,7 +188,7 @@ export class Vehicle {
     // ---- resistências ----
     const vs = Math.max(sp, 0.3);
     const rr = 0.012 + 0.03 * (1 - (this.w[0].surf.mu + this.w[2].surf.mu) / 2) + 0.5 * ((this.w[0].surf.rr + this.w[2].surf.rr) / 2);
-    const drag = dragK * sp, rolling = rr * this.m * G / vs;
+    const drag = dragK * sp * (1 - 0.3 * (this.draft || 0)), rolling = rr * this.m * G / vs;
     Fx -= (drag + rolling) * u; Fy -= (drag + rolling) * v;
     // aclive
     const fxP = this.x + sn * (this.L * 0.5), fzP = this.z + cs * (this.L * 0.5), rxP = this.x - sn * (this.L * 0.5), rzP = this.z - cs * (this.L * 0.5);
@@ -226,7 +228,7 @@ export class Vehicle {
       if (this.gear < 0) { if (u > -1 && inp.throttle > 0.1 && inp.brake < 0.1) set(1); }
       else if (this.gear === 0) set(1);
       else {
-        if (u < 1.2 && inp.brake > 0.2 && inp.throttle < 0.1) set(-1);
+        if (u < 1.2 && inp.brake > 0.2 && inp.throttle < 0.1 && !(inp.handbrake > 0.5)) set(-1);   // (com freio de mão, como na largada, não engata ré)
         else if (this.shiftCd <= 0) {
           if (this.gear < nG && rpmAt(this.gear) > S.redline * (0.86 + 0.07 * this.thr) && this.thr > 0.15) set(this.gear + 1);
           else if (this.gear > 1 && rpmAt(this.gear - 1) < S.redline * (0.74 - 0.10 * (1 - this.thr)) && rpmAt(this.gear) < S.redline * 0.42) set(this.gear - 1);

@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 
 export class Skid {
-  constructor(scene, N = 3500) {
+  constructor(scene, N = 9000) {
     this.N = N; this.n = 0; this.last = new Map(); this.dirty = false;
     this.pos = new Float32Array(N * 4 * 3); this.col = new Float32Array(N * 4 * 4);
     for (let i = 0; i < N * 4; i++) { this.col[i * 4] = this.col[i * 4 + 1] = this.col[i * 4 + 2] = 0.02; }

@@ -90,7 +90,16 @@ export class Race {
       let inp;
       if (this.state === 'grid') inp = { steer: 0, throttle: 0, brake: 1, handbrake: 1, nitro: false };
       else if (r.isPlayer && !r.auto) inp = playerInput;
-      else { const d = r.auto || r.driver; inp = d.control(r, this, dt); if (inp.stuck > 3) { this.resetRacer(r, 8); d.stuck = 0; } }
+      else { const d = r.auto || r.driver; inp = d.control(r, this, dt); if (inp.stuck > 3) { this.resetRacer(r, 8); d.stuck = 0; } if (d.react && this.t < d.react && !r.finished) inp = Object.assign({}, inp, { throttle: 0 }); }   // tempo de reação na largada
+      { // vácuo: quem vem logo atrás de outro carro, em linha reta e rápido, sofre menos resistência do ar
+        const v = r.veh; let best = 0;
+        if (this.state === 'race' && Math.abs(v.u) > 20) {
+          const sn = Math.sin(v.psi), cs = Math.cos(v.psi);
+          for (const o of this.racers) { if (o === r) continue; const dx = o.veh.x - v.x, dz = o.veh.z - v.z, df = dx * sn + dz * cs, dl = dx * cs - dz * sn;
+            if (df > 3.5 && df < 28 && Math.abs(dl) < 1.7) best = Math.max(best, (1 - (df - 3.5) / 24.5) * (1 - Math.abs(dl) / 1.7)); }
+        }
+        v.draft = (v.draft || 0) + (best - (v.draft || 0)) * Math.min(1, dt * 3);
+      }
       r.veh.step(dt, inp, this.env);
       // progresso e voltas
       const loc = tr.locate(r.veh.x, r.veh.z, r.hint), prev = r.idx; r.hint = loc.i; r.idx = loc.i; r.lat = loc.lat;

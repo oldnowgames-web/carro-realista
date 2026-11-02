@@ -16,6 +16,7 @@ function build() {
       ${row('optTrees', rng('oTrees', 0.5, 1.2, 0.05))}
       ${row('optMirror', chk('oMirror'))}
       ${row('optDamage', chk('oDamage'))}
+      ${row('optFx', chk('oFx'))}
       ${row('optCycle', sel('oCycle', [['off', 'cycOff'], ['slow', 'cycSlow'], ['fast', 'cycFast']]))}
     </section>
     <section><h3 data-i18n="optAudio"></h3>
@@ -28,6 +29,8 @@ function build() {
       ${row('optAbs', chk('oAbs'))}
       ${row('optTc', chk('oTc'))}
       ${row('optStab', sel('oStab', [['0', 'off'], ['0.3', 'normal'], ['0.6', 'hard']]))}
+      ${row('optArcade', chk('oArcade'))}
+      ${row('optCorner', chk('oCorner'))}
       ${row('optUnits', sel('oUnits', [['kmh', 'normal'], ['mph', 'normal']]))}
       <details><summary data-i18n="keysTitle"></summary><p class="keys2" id="oKeys"></p></details>
     </section>
@@ -39,9 +42,9 @@ function build() {
   document.body.appendChild(dlg);
   const $ = (id) => dlg.querySelector('#' + id);
   const bind = (id, key, get, conv = (v) => v) => { const el = $(id); el.addEventListener('input', () => setOpt(key, conv(get(el)))); return el; };
-  bind('oQuality', 'quality', (e) => e.value); bind('oTrees', 'treeRange', (e) => +e.value); bind('oMirror', 'mirror', (e) => e.checked); bind('oDamage', 'damageHud', (e) => e.checked);
+  bind('oQuality', 'quality', (e) => e.value); bind('oTrees', 'treeRange', (e) => +e.value); bind('oMirror', 'mirror', (e) => e.checked); bind('oDamage', 'damageHud', (e) => e.checked); bind('oFx', 'fx', (e) => e.checked);
   bind('oCycle', 'cycle', (e) => e.value); bind('oVolume', 'volume', (e) => +e.value); bind('oMusic', 'music', (e) => +e.value); bind('oSteer', 'steerSens', (e) => +e.value);
-  bind('oAuto', 'autoGear', (e) => e.checked); bind('oAbs', 'abs', (e) => e.checked); bind('oTc', 'tc', (e) => e.checked); bind('oStab', 'stab', (e) => +e.value);
+  bind('oAuto', 'autoGear', (e) => e.checked); bind('oAbs', 'abs', (e) => e.checked); bind('oTc', 'tc', (e) => e.checked); bind('oStab', 'stab', (e) => +e.value); bind('oCorner', 'cornerAssist', (e) => e.checked); bind('oArcade', 'arcade', (e) => e.checked);
   bind('oUnits', 'units', (e) => e.value); bind('oLang', 'lang', (e) => e.value);
   $('oClose').onclick = closeOptions;
   dlg.addEventListener('mousedown', (e) => { if (e.target === dlg) closeOptions(); });
@@ -50,9 +53,9 @@ function build() {
 }
 function sync() {
   const $ = (id) => dlg.querySelector('#' + id);
-  $('oQuality').value = S.quality; $('oTrees').value = S.treeRange; $('oMirror').checked = S.mirror; $('oDamage').checked = S.damageHud; $('oCycle').value = S.cycle;
+  $('oQuality').value = S.quality; $('oTrees').value = S.treeRange; $('oMirror').checked = S.mirror; $('oDamage').checked = S.damageHud; $('oFx').checked = S.fx; $('oCycle').value = S.cycle;
   $('oVolume').value = S.volume; $('oMusic').value = S.music; $('oSteer').value = S.steerSens; $('oAuto').checked = S.autoGear; $('oAbs').checked = S.abs; $('oTc').checked = S.tc;
-  $('oStab').value = String(S.stab); $('oUnits').value = S.units; $('oLang').value = S.lang; $('oKeys').textContent = t('keysList');
+  $('oStab').value = String(S.stab); $('oCorner').checked = S.cornerAssist; $('oArcade').checked = S.arcade; $('oUnits').value = S.units; $('oLang').value = S.lang; $('oKeys').textContent = t('keysList');
 }
 function fixLabels() { const $ = (id) => dlg.querySelector('#' + id); ['0', '0.3', '0.6'].forEach((v, i) => { $('oStab').options[i].textContent = v; }); $('oUnits').options[0].textContent = 'km/h'; $('oUnits').options[1].textContent = 'mph'; }
 addEventListener('optionschange', (e) => { if (e.detail === 'lang' && dlg) fixLabels(); });

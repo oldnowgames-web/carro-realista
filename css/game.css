@@ -59,3 +59,5 @@ body{touch-action:none}
 .ovl a.btn.pri{background:var(--amber);color:#2a1d00;border-color:var(--amber);font-weight:600;text-decoration:none}
 .ovl .btn{text-decoration:none}
 @media(max-width:900px){#mm{width:140px;height:140px}#mirrorFrame{width:46vw}}
+
+#mirrorFrame{display:none!important}

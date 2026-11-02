@@ -62,6 +62,30 @@ export function planForest(track, terrain, { density = 1, seed = 11 } = {}) {
   return out;
 }
 
+
+/**
+ * Os pixels transparentes das texturas de folha são PRETOS. Ao gerar os mipmaps (objetos distantes) esse preto se mistura
+ * com a folha: a copa escurece e vira "borrão". Aqui o RGB dos pixels transparentes recebe a cor média da folha
+ * (o alpha continua igual), então a copa distante mantém a cor certa.
+ */
+function fixLeafTexture(tex) {
+  const img = tex && tex.image; if (!img) return tex;
+  const w = img.width, h = img.height, c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, w, h).data, out = new Uint8Array(d.length);
+  let r = 0, gr = 0, b = 0, wsum = 0;
+  for (let i = 0; i < d.length; i += 4) { const a = d[i + 3]; if (a > 200) { r += d[i]; gr += d[i + 1]; b += d[i + 2]; wsum++; } }
+  const mr = wsum ? r / wsum : 60, mg = wsum ? gr / wsum : 90, mb = wsum ? b / wsum : 20;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3], k = a >= 200 ? 1 : a / 200;   // quanto do pixel é "folha de verdade"
+    out[i] = d[i] * k + mr * (1 - k); out[i + 1] = d[i + 1] * k + mg * (1 - k); out[i + 2] = d[i + 2] * k + mb * (1 - k); out[i + 3] = a;
+  }
+  const t = new THREE.DataTexture(out, w, h, THREE.RGBAFormat);
+  t.colorSpace = tex.colorSpace; t.flipY = false; t.wrapS = tex.wrapS; t.wrapT = tex.wrapT;
+  t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.anisotropy = 8; t.needsUpdate = true;
+  tex.dispose(); return t;
+}
+
 // ---------------------------------------------------------------- materiais / vento / dissolução por distância
 function windPatch(mat, U, leaf) {
   mat.onBeforeCompile = (sh) => {
@@ -80,8 +104,21 @@ float gust = 0.6 + 0.4 * sin(uTime * 0.23 + ip.x * 0.004);
 float sw = (sin(uTime * 1.25 + ph) * 0.016 + sin(uTime * 0.6 + ph * 0.7) * 0.028) * hh * uWind * gust;
 float fl = sin(uTime * 8.0 + transformed.x * 2.7 + transformed.z * 2.1 + ph) * 0.035 * uLeaf * uWind * smoothstep(1.5, 6.0, hh);
 transformed.x += sw + fl; transformed.z += sw * 0.6 + fl * 0.8;`);
+    if (leaf) sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', `
+#ifdef USE_ALPHATEST
+#ifdef USE_MAP
+{ // com a distância o mipmap dilui o alpha das folhas; baixa o corte conforme o nível do mip para a copa não virar pontinhos
+  vec2 ts = vec2(textureSize(map, 0)); vec2 gx = dFdx(vMapUv * ts), gy = dFdy(vMapUv * ts);
+  float lod = 0.5 * log2(max(max(dot(gx, gx), dot(gy, gy)), 1.0));
+  float cut = alphaTest * (1.0 - 0.62 * smoothstep(0.6, 4.0, lod));
+  if (diffuseColor.a < cut) discard; }
+#else
+if (diffuseColor.a < alphaTest) discard;
+#endif
+#endif
+`);
   };
-  mat.customProgramCacheKey = () => 'wind' + (leaf ? 'L' : 'B');
+  mat.customProgramCacheKey = () => 'wind' + (leaf ? 'L2' : 'B');
 }
 function grassPatch(mat, U) {
   mat.onBeforeCompile = (sh) => {
@@ -190,6 +227,8 @@ export class Vegetation {
     for (const n of names) for (const k of ['bark', 'leaves', 'solid']) { const e = this.P[n][k]; if (!e || keep.has(e.mat)) continue;
       for (const t of [e.mat.map, e.mat.normalMap]) if (t) { t.dispose(); if (t.source && t.source.data && t.source.data.close) try { t.source.data.close(); } catch {} } }
     const U = this.U;
+    this.P.tree1.leaves.mat.map = fixLeafTexture(this.P.tree1.leaves.mat.map);
+    this.P.pine1.leaves.mat.map = fixLeafTexture(this.P.pine1.leaves.mat.map);
     const bark = this.P.tree1.bark.mat; bark.roughness = 0.92; bark.metalness = 0; bark.envMapIntensity = 0.5; windPatch(bark, U, false);
     const mkLeaf = (m) => { m.transparent = false; m.depthWrite = true; m.alphaTest = 0.45; m.alphaToCoverage = true; m.side = THREE.DoubleSide; m.roughness = 0.78; m.metalness = 0; m.envMapIntensity = 0.7; windPatch(m, U, true); return m; };
     this.mat = { bark, leafTree: mkLeaf(this.P.tree1.leaves.mat), leafPine: mkLeaf(this.P.pine1.leaves.mat), rock: this.P.pedra1.solid.mat, pebble: this.P.seixo1.solid.mat };

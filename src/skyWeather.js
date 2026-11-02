@@ -27,7 +27,7 @@ export class SkyWeather {
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x333333, 0.5); scene.add(this.hemi);
     scene.fog = new THREE.FogExp2(0xffffff, 0.001);
     this.sunDir = new THREE.Vector3(0, 1, 0);
-    this.expScale = 1; this.preset = 'manha'; this.rain = 0; this.rainTarget = 0; this.wet = 0; this.wind = 1;
+    this.expScale = 0.88;   // iluminação geral um pouco menor (teclas [ e ] ajustam) this.preset = 'manha'; this.rain = 0; this.rainTarget = 0; this.wet = 0; this.wind = 1;
     this._buildRain();
     this.clouds = new Clouds(scene, camera);
     this.setPreset('manha');

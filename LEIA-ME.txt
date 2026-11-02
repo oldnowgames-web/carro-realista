@@ -1,0 +1,40 @@
+CORRIDA - projeto completo
+1) Abra a pasta "racer" no VS Code e use o Live Server em index.html.
+2) Se algo der erro: F12 > Console, e veja a primeira linha vermelha.
+
+Arquivos ORIGINAIS (do zip garagem-passo3-v3): carData, carModel, carSpecs, collide, input, noise, paint,
+showroom, terrain, textures (montanhas, texturas, garagem, cores e carros como antes), sceneMain.js e css/scene.css.
+Mantidos do jogo atual: vegetacao (arvores), HUD, opcoes, campeonato, fantasma etc.
+Plateia/boxes: desligados em src/worldBuilder.js (VENUE = false). Retrovisor: desligado em src/gameMain.js.
+
+NOVO: (1) src/interp.js - o carro nao treme mais (a imagem e interpolada entre os passos da fisica).
+      (2) src/assist.js - "Ajuda nas curvas": soltar o acelerador ja freia sozinho ate a velocidade segura da curva
+          (Opcoes > Controles > "Ajuda nas curvas"). Se voce acelerar ou frear, a ajuda nao interfere.
+
+NOVO: DIRECAO FACIL (arcade), como no Old Racers - src/arcade.js (ligada por padrao).
+      O volante comanda o giro direto, o carro "gruda" na direcao que aponta, soltar o acelerador ja desacelera e a
+      "Ajuda nas curvas" freia sozinha so se voce estiver rapido demais para uma curva fechada.
+      Vale para o seu carro e para os bots. Para voltar a fisica realista de pneus: Opcoes > Controles > desmarque "Direcao facil".
+      Recordes e fantasma ficam separados por modo (arcade x realista).
+      Ajustes: velocidade maxima, aceleracao e aderencia de cada carro estao na tabela ARC no topo de src/arcade.js.
+
+AJUSTE (arcade): a curva ficou mais suave. Em src/arcade.js: YAW0 = giro maximo (rad/s), YAWK = quanto o giro cai com a velocidade,
+STEER_CURVE = sensibilidade do volante (maior = toques leves giram menos). Se ainda achar rapido, baixe YAW0 (ex.: 1.25).
+CORRIGIDO: carros dando re sozinhos antes da largada (arcade e realista).
+
+
+=== REALISMO EXTRA (novo) ===
+Ligado em Opções > Gráficos > "Realismo extra" (ou desligue com ?fx=0 na URL). Em PC fraco o jogo desliga sozinho os efeitos mais caros.
+- Névoa por altura + perspectiva do ar (src/fogpatch.js): vales mais enevoados, montanhas azuladas ao longe.
+- Asfalto (src/roadShader.js): remendos, rachaduras, trilha de borracha, óleo, poças com chuva.
+- Sombras de nuvens no chão (terrain.js / roadShader.js).
+- Pós-processamento (src/postfx.js): desfoque de movimento pela velocidade e pela curva, raios de sol, aberração cromática,
+  correção de cor, vinheta e grão de filme, SMAA.
+- Reflexo dinâmico na lataria do seu carro (src/reflect.js), sombra de contato e manchas sob os pneus, desfoque nas rodas
+  girando rápido, labareda do escapamento, poeira acumulando na lataria, vibração do motor.
+- Partículas (src/particles.js): faíscas nas batidas, pedrinhas do cascalho, respingos e spray da chuva. Marcas de pneu duram bem mais.
+- Som: estouros do escapamento em sequência e motor dos bots com som posicional/Doppler (src/aiaudio.js).
+- IA mais humana (ai.js/race.js): tempo de reação na largada, ritmo que varia, ultrapassagem sem ziguezague, mais erros na chuva.
+  Vácuo: quem vem logo atrás de outro carro, em reta, sofre menos resistência do ar. Não existe "elástico" artificial.
+- Teclas novas: Y = replay dos últimos ~25 s (←/→ velocidade, Espaço pausa, Esc sai) · H = modo foto (arraste/roda do mouse,
+  ↑/↓ lente, Enter salva um PNG, H/Esc sai).
