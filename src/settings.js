@@ -7,7 +7,7 @@ export const setOpt = (k, v) => { S[k] = v; saveSettings(); dispatchEvent(new Cu
 
 const D = {
   pt: {
-    appTitle: 'CORRIDA', tagline: 'Simulador de corrida', start: 'Iniciar', pressKey: 'Pressione Enter ou Espaço', options: 'Opções', close: 'Fechar',
+    appTitle: 'OVERDRIVE BRASIL', tagline: 'Simulador de corrida', start: 'Iniciar', pressKey: 'Pressione Enter ou Espaço', options: 'Opções', close: 'Fechar',
     garage: 'Garagem', car: 'Carro', color: 'Cor', otherColor: 'Outra cor', finish: 'Acabamento', demo: 'Demonstração', headlights: 'Faróis', brake: 'Freio', spin: 'Rodar',
     dragHint: 'Arraste para girar · roda do mouse para aproximar', race: 'Corrida', mode: 'Modo', modeRace: 'Corrida contra bots', modeTT: 'Contra-relógio (fantasma)', modeChamp: 'Campeonato (9 pistas)',
     track: 'Pista', reverse: 'Sentido inverso', laps: 'Voltas', difficulty: 'Dificuldade', easy: 'Fácil', normal: 'Normal', hard: 'Difícil', back: 'Voltar', ready: 'Pronto', record: 'Recorde', noRecord: 'sem recorde',
@@ -31,7 +31,7 @@ const D = {
     arrowL: 'curva à esquerda', arrowR: 'curva à direita', hairpin: 'grampo', loading: 'Carregando…',
   },
   en: {
-    appTitle: 'RACING', tagline: 'Racing simulator', start: 'Start', pressKey: 'Press Enter or Space', options: 'Options', close: 'Close',
+    appTitle: 'OVERDRIVE BRASIL', tagline: 'Racing simulator', start: 'Start', pressKey: 'Press Enter or Space', options: 'Options', close: 'Close',
     garage: 'Garage', car: 'Car', color: 'Color', otherColor: 'Custom color', finish: 'Finish', demo: 'Demo', headlights: 'Headlights', brake: 'Brake', spin: 'Rotate',
     dragHint: 'Drag to rotate · mouse wheel to zoom', race: 'Race', mode: 'Mode', modeRace: 'Race against bots', modeTT: 'Time trial (ghost)', modeChamp: 'Championship (9 tracks)',
     track: 'Track', reverse: 'Reverse direction', laps: 'Laps', difficulty: 'Difficulty', easy: 'Easy', normal: 'Normal', hard: 'Hard', back: 'Back', ready: 'Ready', record: 'Record', noRecord: 'no record',

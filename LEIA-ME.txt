@@ -1,4 +1,4 @@
-CORRIDA - projeto completo
+OVERDRIVE BRASIL - projeto completo
 1) Abra a pasta "racer" no VS Code e use o Live Server em index.html.
 2) Se algo der erro: F12 > Console, e veja a primeira linha vermelha.
 
@@ -7,13 +7,13 @@ CORRIDA - projeto completo
 05 Deserto Vermelho (dunas, mesas, cactos), 06 Alpes Nevados (neve caindo, pinheiros congelados), 07 Circuito Urbano (noite, prédios com
 janelas acesas, postes de luz, estrelas e lua), 08 Floresta Tropical (mata fechada, chuva, terra vermelha), 09 Estrada do Interior
 (cercas, postes de energia, fardos de feno, celeiros).
-- Tela de modos (modo.html): cada mapa tem um quadro com FOTO REAL do mundo (assets/maps/ID.jpg), nome, descrição, tags, comprimento e
+- Tela de modos (modo.html): cada mapa tem um quadro com FOTO REAL do mundo (maps/ID.jpg), nome, descrição, tags, comprimento e
   a silhueta do traçado. O mapa SELECIONADO mostra o mundo 3D AO VIVO (preview.html em iframe, câmera voando pela pista). O 3D ao vivo só
   liga em tela grande (>= 700 px) e PC com 4+ núcleos; no celular fica só a foto.
 - Onde mexer: src/tracksData.js (traçado das pistas novas) · src/themes.js (relevo, cores do chão, vegetação, clima, objetos de cada mapa) ·
   src/props.js (palmeira, cacto, prédio, poste, cerca, casa, celeiro, mar - tudo feito em código) · src/skyWeather.js (presets noite/deserto/neve, estrelas, neve).
 - Criar um mapa novo: 1) pista em src/tracksData.js com theme: 'meu-tema'; 2) THEMES['meu-tema'] em src/themes.js (veja o guia no topo do arquivo);
-  3) gerar a foto: abra preview.html?pista=ID&cap=1 (baixa ID.jpg) e coloque em assets/maps/. Sem a foto, o quadro mostra um degradê do tema.
+  3) gerar a foto: abra preview.html?pista=ID&cap=1 (baixa ID.jpg) e coloque em maps/. Sem a foto, o quadro mostra um degradê do tema.
 - O Vale Verde segue o "ciclo de horário" das opções; os outros mapas têm horário e clima fixos do tema (a tecla do clima ainda funciona).
 - Campeonato: agora passa pelas 9 pistas.
 
@@ -67,5 +67,10 @@ Ligado em Opções > Gráficos > "Realismo extra" (ou desligue com ?fx=0 na URL)
   Sem os arquivos, toca uma música sintetizada de reserva. Nomes das faixas: TRACKS em src/music.js.
 - OPÇÕES novas (abas Som / Gráficos / Controles / Geral): volume geral, música, motor e efeitos, silenciar tudo, aleatório, repetir, música na corrida.
 - TELA INICIAL nova (index.html + css/start.css + src/hero.js): carro 3D desfilando. O nome do jogo está em src/settings.js (appTitle), pt e en.
-- Camaro removido. Novos: Muscle 70 e Cyber Truck (assets/cars/muscle.glb, cyber.glb; config em src/carData.js).
+- Camaro removido. Novos: Muscle 70 e Cyber Truck (cars/carroN.glb; config em src/carData.js).
 - "Mudadinha" em todos os carros (src/carMods.js, campo mods em carData.js): largura, aerofólio, lip, saias, listras, aros, vidro, barra de luz.
+
+=== NOME E PASTAS (atual) ===
+- O jogo agora se chama OVERDRIVE BRASIL (src/settings.js, appTitle; titulo das abas nos .html).
+- Pastas soltas na raiz do projeto (fora de "assets"): cars/ (carro1.glb ... carro15.glb), nature/, sounds/ (music1 ... music7) e maps/ (fotos dos mapas).
+- Carros: Carro 1 ... Carro 15 (ver NOVOS-CARROS-E-MUSICAS.md). 6 rivais sorteados a cada corrida.

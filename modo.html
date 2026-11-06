@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Modo de jogo</title>
+  <title>Modo de jogo · OverDrive Brasil</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -67,7 +67,7 @@
     let o = {}; try { o = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
     const st = { mode: o.mode || 'race', track: o.track || TRACKS[0].id, rev: !!o.rev, laps: String(o.laps || 3), dif: String(o.dif || 1) };
     if (!TRACKS.some((x) => x.id === st.track)) st.track = TRACKS[0].id;
-    let carId = 'aventador'; try { carId = (JSON.parse(localStorage.getItem('garage_v1')) || {}).car || carId; } catch {}
+    let carId = 'carro1'; try { carId = (JSON.parse(localStorage.getItem('garage_v1')) || {}).car || carId; } catch {}
     const car = CAR_LIST.find((c) => c.id === carId) || CAR_LIST[0]; carId = car.id; $('carName').textContent = car.name;
     // ---------- quadros dos mapas: foto real do mundo (assets/maps/ID.jpg) em todos + mundo 3D ao vivo só no selecionado ----------
     const en = () => S.lang === 'en';
