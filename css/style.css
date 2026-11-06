@@ -80,3 +80,6 @@ kbd{font:inherit;font-size:11px;color:var(--mute);margin-left:4px}
 .fields select option{color:#111}
 .muted2{margin:0;color:var(--mute);font-size:13px}
 .ready .optbtn{padding:0 12px;border-radius:10px}
+
+#player{position:fixed;right:16px;top:16px;z-index:30;width:min(400px,calc(100vw - 32px))}
+@media (max-width:820px){#player{left:8px;right:8px;top:8px;width:auto}#specs{top:72px}}
