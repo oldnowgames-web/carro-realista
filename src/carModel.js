@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Paint } from './paint.js';
+import { applyMods } from './carMods.js';
 
 const TAU = Math.PI * 2;
 const match = (name, spec) => (spec instanceof RegExp ? spec.test(name) : name === spec);
@@ -113,6 +114,7 @@ export function buildCar(gltf, cfg) {
   const placer = new THREE.Group();
   const nat = new THREE.Group();
   placer.add(nat); nat.add(src);
+  src.rotation.y = cfg.preRotY || 0;   // alguns GLB vêm girados na cena: alinha o carro (frente em +Z, eixos em X) antes de achar as rodas
 
   // materiais próprios deste carro (para pintar cada instância de uma cor)
   const matMap = new Map();
@@ -129,7 +131,7 @@ export function buildCar(gltf, cfg) {
   if (Array.isArray(cfg.wheels)) {
     for (const w of cfg.wheels) {
       const o = findNode(src, w.node);
-      if (o) wdesc.push({ objs: [o], front: !!w.front, left: !!w.left, pair: !!w.pair });
+      if (o) wdesc.push({ objs: [o], front: w.auto ? undefined : !!w.front, left: w.auto ? undefined : !!w.left, pair: !!w.pair });
     }
   } else if (cfg.wheels && cfg.wheels.pairNodes) {
     const [reA, reB] = cfg.wheels.pairNodes;
@@ -228,14 +230,15 @@ export function buildCar(gltf, cfg) {
     cz = fz.length && rz.length ? (avg(fz) + avg(rz)) / 2 : avg(wm.map((e) => e.z));
     ground = Math.min(...wm.map((e) => e.y - e.r));
   } else { cz = (b0.max.z + b0.min.z) / 2 * s; ground = b0.min.y * s; }
+  const wd = rotY === 0 && cfg.mods && cfg.mods.widen ? cfg.mods.widen : 1;      // carroceria um pouco mais larga (mods)
   placer.rotation.y = rotY;
-  placer.scale.setScalar(s);
-  placer.position.set(-bx, -ground, -cz);
-  for (const e of wm) { e.w.mx = e.x - bx; e.w.mz = e.z - cz; e.w.radiusM = e.r; }
+  placer.scale.set(s * wd, s, s);
+  placer.position.set(-bx * wd, -ground, -cz);
+  for (const e of wm) { e.w.mx = (e.x - bx) * wd; e.w.mz = e.z - cz; e.w.radiusM = e.r; }
 
   const dims = {
     length: cfg.length,
-    width: (b0.max.x - b0.min.x) * s,
+    width: (b0.max.x - b0.min.x) * s * wd,
     height: (b0.max.y - b0.min.y) * s,
     wheelRadius: wm.length ? avg(wm.map((e) => e.r)) : 0.34,
     wheelbase: 0, track: 0,
@@ -248,6 +251,8 @@ export function buildCar(gltf, cfg) {
   const root = new THREE.Group();
   const chassis = new THREE.Group();
   root.add(chassis); chassis.add(placer);
+  const glowMats = [];
+  applyMods({ cfg, src, chassis, dims, wheels, paint, glassMats: mats.filter((m) => matchAny(m.name, cfg.glass)), rimMats: mats.filter((m) => matchAny(m.name, cfg.rims)), wheelR: dims.wheelRadius, glowMats });
   const beams = [];
   for (const sx of [-1, 1]) {
     const sp = new THREE.SpotLight(0xfff0d8, 0, 34, 0.42, 0.65, 1.2);

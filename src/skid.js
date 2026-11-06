@@ -25,10 +25,18 @@ export class Skid {
     const px = dz / d * hw, pz = -dx / d * hw, v = (this.n % this.N) * 4, P = this.pos, C = this.col;
     const set = (k, X, Y, Z, a) => { P[(v + k) * 3] = X; P[(v + k) * 3 + 1] = Y; P[(v + k) * 3 + 2] = Z; C[(v + k) * 4 + 3] = a; };
     set(0, L.x + px, L.y, L.z + pz, L.a); set(1, L.x - px, L.y, L.z - pz, L.a); set(2, x + px, y, z + pz, alpha); set(3, x - px, y, z - pz, alpha);
+    { const seg = (this.n % this.N); if (this._cnt > 0 && seg !== this._f0 + this._cnt) this._full = true; if (!this._cnt) this._f0 = seg; this._cnt = (this._cnt || 0) + 1; }
     this.n++; this.dirty = true; L.x = x; L.y = y; L.z = z; L.a = alpha;
   }
   flush() {
-    if (!this.dirty) return; this.dirty = false; this.pa.needsUpdate = this.ca.needsUpdate = true;
+    if (!this.dirty) return; this.dirty = false;
+    const pa = this.pa, ca = this.ca;
+    if (pa.clearUpdateRanges && pa.addUpdateRange && !this._full && this._cnt > 0 && this._f0 + this._cnt <= this.N) {   // só os quadrinhos novos vão para a GPU
+      pa.clearUpdateRanges(); ca.clearUpdateRanges();
+      pa.addUpdateRange(this._f0 * 12, this._cnt * 12); ca.addUpdateRange(this._f0 * 16, this._cnt * 16);
+    } else if (pa.clearUpdateRanges) { pa.clearUpdateRanges(); ca.clearUpdateRanges(); }
+    this._cnt = 0; this._full = false;
+    pa.needsUpdate = ca.needsUpdate = true;
     this.geo.setDrawRange(0, Math.min(this.n, this.N) * 6);
   }
 }

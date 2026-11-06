@@ -1,5 +1,6 @@
-// uiaudio.js — música de menu (sintetizada, em loop) e sons de interface. Começa no primeiro clique/tecla (regra do navegador).
+// uiaudio.js — sons de interface (cliques) e música sintetizada de reserva: só toca se NÃO houver arquivos em sounds/ (veja music.js). Começa no primeiro clique/tecla (regra do navegador).
 import { S } from './settings.js';
+import { getState } from './music.js';
 
 let C = null, master = null, mus = null, timer = 0, step = 0, nextT = 0, started = false;
 const BPM = 92, SPB = 60 / BPM / 2;                         // colcheias
@@ -29,13 +30,13 @@ function tick() {
   while (nextT < C.currentTime + 0.25) { schedule(step, Math.max(nextT, C.currentTime)); step++; nextT += SPB; }
 }
 export function startMusic() {
-  if (started || !S.music) return; if (!C) return; started = true; mus.gain.value = S.music * 0.4; nextT = C.currentTime + 0.1; timer = setInterval(tick, 40);
+  if (started || !S.music || !S.musicOn) return; if (!C) return; started = true; mus.gain.value = S.muteAll ? 0 : S.music * 0.4; nextT = C.currentTime + 0.1; timer = setInterval(tick, 40);
 }
-export function blip(freq = 660, dur = 0.06, vol = 0.12) { if (!C || !S.volume) return; tone(C.currentTime, freq, dur, 'sine', vol * S.volume, master, 0.004); }
+export function blip(freq = 660, dur = 0.06, vol = 0.12) { if (!C || !S.volume || S.muteAll) return; tone(C.currentTime, freq, dur, 'sine', vol * S.volume * S.sfx, master, 0.004); }
 function init() {
   if (C) { C.resume(); return; }
-  C = new (window.AudioContext || window.webkitAudioContext)(); master = C.createGain(); master.gain.value = S.volume; master.connect(C.destination);
-  mus = C.createGain(); mus.gain.value = 0; mus.connect(master); startMusic();
+  C = new (window.AudioContext || window.webkitAudioContext)(); master = C.createGain(); master.gain.value = S.muteAll ? 0 : S.volume; master.connect(C.destination);
+  mus = C.createGain(); mus.gain.value = 0; mus.connect(master); if (getState().allFailed) startMusic();
 }
 export function initUiAudio() {
   const go = () => { init(); };
@@ -44,7 +45,8 @@ export function initUiAudio() {
   document.addEventListener('mouseover', (e) => { if (C && e.target.closest('button,a,.car,.sw,.fin')) blip(1100, 0.03, 0.04); });
   addEventListener('optionschange', (e) => {
     if (!C) return;
-    if (e.detail === 'volume') master.gain.value = S.volume;
-    if (e.detail === 'music') { if (S.music && !started) startMusic(); if (mus) mus.gain.value = S.music * 0.4; }
+    if (e.detail === 'volume' || e.detail === 'muteAll') master.gain.value = S.muteAll ? 0 : S.volume;
+    if (e.detail === 'music' || e.detail === 'musicOn') { if (getState().allFailed && S.music && !started) startMusic(); if (mus) mus.gain.value = S.musicOn ? S.music * 0.4 : 0; }
   });
+  addEventListener('musicchange', (e) => { if (e.detail.allFailed && C && !started) startMusic(); });
 }

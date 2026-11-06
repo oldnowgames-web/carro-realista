@@ -29,7 +29,7 @@ export class Driver {
     const s0 = rc.idx * tr.ds;
     // ----- linha: parte de dentro das curvas -----
     const Ld = clamp(7 + 0.9 * Math.max(u, 0), 9, 70);
-    const kAhead = tr.at(s0 + Ld * 1.6).k;
+    const kAhead = tr.kAt(s0 + Ld * 1.6);
     let want = clamp(kAhead * 150, -3.4, 3.4) * this.skill + this.bias * 0.5;
     // ----- erros ocasionais -----
     this.errT -= dt;
@@ -51,7 +51,7 @@ export class Driver {
     const along = (v.x - pc.x) * tx + (v.z - pc.z) * tz;
     const pn = tr.at(s0 + along), latErr = (v.x - pn.x) * pn.nx + (v.z - pn.z) * pn.nz - this.off;   // + = carro à esquerda da linha
     let he = pn.h - v.psi; he = Math.atan2(Math.sin(he), Math.cos(he));
-    const kff = tr.at(s0 + clamp(0.35 * Math.abs(u) + 4, 6, 40)).k;
+    const kff = tr.kAt(s0 + clamp(0.35 * Math.abs(u) + 4, 6, 40));
     const slipB = Math.atan2(v.v, Math.max(Math.abs(u), 5));
     const dTot = Math.atan(v.L * kff) + 0.9 * he - Math.atan(1.7 * latErr / (Math.abs(u) + 5)) - clamp(0.6 * slipB, -0.15, 0.15);
     let steer = clamp(dTot / v.maxSteer(u), -1, 1);
@@ -60,7 +60,7 @@ export class Driver {
     const ag = 0.95 + 0.1 * this.aggr, muE = spec.mu * (1 - 0.28 * wet) * 0.84 * this.skill * ag, aB = spec.brakeG * (1 - 0.25 * wet) * G * 0.68 * this.skill * ag;
     let target = 120;
     for (let d = 0; d <= 340; d += 8) {
-      const p = tr.at(s0 + d), kk = Math.abs(p.k), vc = Math.sqrt(muE * G / Math.max(kk, 1e-4) * (1 + 0.0004 * 0)) ;
+      const kk = Math.abs(tr.kAt(s0 + d)), vc = Math.sqrt(muE * G / Math.max(kk, 1e-4) * (1 + 0.0004 * 0)) ;
       target = Math.min(target, Math.sqrt(vc * vc + 2 * aB * d));
     }
     if (close < 14 - 4 * this.aggr) target = Math.min(target, closeU + (close - (6 - 2.5 * this.aggr)) * 0.6);
@@ -71,7 +71,7 @@ export class Driver {
     if (err > -1.2) throttle = clamp(0.22 + err * 0.35, 0, 1); else if (err < -2) brake = clamp((-err - 1.2) * 0.3, 0, 1);
     if (Math.abs(steer) > 0.7 && u > 12) throttle *= 0.65;
     if (Math.abs(slipB) > 0.17) throttle = 0;
-    const straight = Math.abs(tr.at(s0 + 60).k) < 0.002 && Math.abs(tr.at(s0 + 140).k) < 0.003;
+    const straight = Math.abs(tr.kAt(s0 + 60)) < 0.002 && Math.abs(tr.kAt(s0 + 140)) < 0.003;
     const nitro = straight && v.nit > 0.45 && throttle > 0.9 && Math.abs(steer) < 0.1;
     // ----- preso? -----
     if (race.state === 'race') { if (Math.abs(u) < 1.5) this.stuck += dt; else this.stuck = 0; }
@@ -82,7 +82,7 @@ export class Driver {
     const v = rc.veh, tr = race.world.track, u = v.u, A = arcSpec(v), s0 = rc.idx * tr.ds;
     // ----- linha (parte de dentro das curvas), erros ocasionais e desvio de quem está à frente -----
     const Ld = clamp(9 + 0.55 * Math.max(u, 0), 11, 55);
-    const kAhead = tr.at(s0 + Ld * 1.4).k;
+    const kAhead = tr.kAt(s0 + Ld * 1.4);
     let want = clamp(kAhead * 150, -3.4, 3.4) * this.skill + this.bias * 0.5;
     this.errT -= dt;
     if (this.errT <= 0) { this.errT = (14 + this.R() * 35) / this.errK / (1 + 0.9 * (race.world.wet || 0)); this.errLeft = 1.4; this.errOff = (this.R() < 0.5 ? -1 : 1) * (1.2 + this.R() * 1.6) * (1.02 - this.skill) * 8 * this.errK; }
@@ -110,14 +110,14 @@ export class Driver {
     const cap = A.top * clamp(0.74 + 0.8 * (this.skill - 0.85) + 0.06 * this.aggr, 0.7, 1.0), aB = 20 * (0.85 + 0.2 * this.aggr);
     let target = cap;
     for (let d = 0; d <= 280; d += 10) {
-      const kk = Math.abs(tr.at(s0 + d).k), vc = 0.92 * yawMax(Math.max(u, 20)) / Math.max(kk, 1e-4);
+      const kk = Math.abs(tr.kAt(s0 + d)), vc = 0.92 * yawMax(Math.max(u, 20)) / Math.max(kk, 1e-4);
       target = Math.min(target, Math.sqrt(vc * vc + 2 * aB * d));
     }
     if (close < 12 - 4 * this.aggr) target = Math.min(target, closeU + (close - (6 - 2.5 * this.aggr)) * 0.6);
     target *= this._mood(dt, race.world.wet || 0); this.tgt = this.tgt == null ? target : this.tgt + (target - this.tgt) * Math.min(1, dt * (target < this.tgt ? 10 : 2.5));
     const e = this.tgt - u; let throttle = 0, brake = 0;
     if (e > -1) throttle = clamp(0.25 + e * 0.5, 0, 1); else brake = clamp((-e - 1) * 0.12, 0, 1);
-    const straight = Math.abs(tr.at(s0 + 60).k) < 0.002 && Math.abs(tr.at(s0 + 140).k) < 0.003;
+    const straight = Math.abs(tr.kAt(s0 + 60)) < 0.002 && Math.abs(tr.kAt(s0 + 140)) < 0.003;
     const nitro = straight && v.nit > 0.45 && throttle > 0.9 && Math.abs(steer) < 0.1;
     if (race.state === 'race') { if (Math.abs(u) < 1.5) this.stuck += dt; else this.stuck = 0; }
     return { steer, throttle, brake, handbrake: 0, nitro, up: false, down: false, stuck: this.stuck };

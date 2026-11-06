@@ -1,20 +1,41 @@
 // audio.js — som do carro sintetizado (sem arquivos): motor por perfil de carro (cilindros, timbre, turbo), pneus, vento, cascalho e batidas.
 import { S } from './settings.js';
 
+// Proteção global: o navegador lança TypeError se setTargetAtTime receber NaN/Infinity (ou número maior que o limite de float32).
+// Aqui qualquer valor ruim é ignorado/limitado em vez de derrubar o jogo.
+if (typeof AudioParam !== 'undefined' && !AudioParam.prototype.__safeTarget) {
+  const orig = AudioParam.prototype.setTargetAtTime, MAXF = 3.4e38;
+  AudioParam.prototype.setTargetAtTime = function (v, t, c) {
+    v = Number(v); t = Number(t); c = Number(c);
+    if (!Number.isFinite(v) || !Number.isFinite(t) || !Number.isFinite(c)) return this;
+    return orig.call(this, Math.max(-MAXF, Math.min(MAXF, v)), t, Math.max(0, Math.min(MAXF, c)));
+  };
+  AudioParam.prototype.__safeTarget = true;
+}
+
 // firing = pulsos por rotação (cilindros/2); bright = timbre; rasp = aspereza; turbo = assobio + alívio; pops = estouros ao tirar o pé
 export const PROFILES = {
-  aventador:    { firing: 6, bright: 1.5, rasp: 0.55, rumble: 0.6, turbo: 0, pops: 0.05, waves: ['sawtooth', 'sawtooth', 'square'] },
-  camaro:       { firing: 4, bright: 0.8, rasp: 0.5, rumble: 1.5, turbo: 0, pops: 0.04, waves: ['sawtooth', 'square', 'sawtooth'] },
-  hatch:        { firing: 3, bright: 1.0, rasp: 0.4, rumble: 0.7, turbo: 1, pops: 0.02, waves: ['sawtooth', 'triangle', 'sawtooth'] },
-  sport_orange: { firing: 2, bright: 1.25, rasp: 0.6, rumble: 0.4, turbo: 0, pops: 0.02, waves: ['sawtooth', 'square', 'sawtooth'] },
-  sport_white:  { firing: 2, bright: 1.2, rasp: 0.55, rumble: 0.45, turbo: 0, pops: 0.02, waves: ['sawtooth', 'square', 'sawtooth'] },
-  sport_atlas:  { firing: 3, bright: 1.1, rasp: 0.5, rumble: 0.6, turbo: 1, pops: 0.03, waves: ['sawtooth', 'sawtooth', 'triangle'] },
+  carro1:    { firing: 6, bright: 1.5, rasp: 0.55, rumble: 0.6, turbo: 0, pops: 0.05, waves: ['sawtooth', 'sawtooth', 'square'] },
+  carro2:       { firing: 4, bright: 0.8, rasp: 0.55, rumble: 1.6, turbo: 0, pops: 0.05, waves: ['sawtooth', 'square', 'sawtooth'] },
+  carro3:        { firing: 8, bright: 1.9, rasp: 0.08, rumble: 0.15, turbo: 1, pops: 0, waves: ['sine', 'triangle', 'sine'] },
+  carro4:        { firing: 3, bright: 1.0, rasp: 0.4, rumble: 0.7, turbo: 1, pops: 0.02, waves: ['sawtooth', 'triangle', 'sawtooth'] },
+  carro5: { firing: 2, bright: 1.25, rasp: 0.6, rumble: 0.4, turbo: 0, pops: 0.02, waves: ['sawtooth', 'square', 'sawtooth'] },
+  carro6:  { firing: 2, bright: 1.2, rasp: 0.55, rumble: 0.45, turbo: 0, pops: 0.02, waves: ['sawtooth', 'square', 'sawtooth'] },
+  carro7:  { firing: 3, bright: 1.1, rasp: 0.5, rumble: 0.6, turbo: 1, pops: 0.03, waves: ['sawtooth', 'sawtooth', 'triangle'] },
+  carro8:  { firing: 3, bright: 1.0, rasp: 0.45, rumble: 0.7, turbo: 1, pops: 0.04, waves: ['sawtooth', 'sawtooth', 'triangle'] },
+  carro9:  { firing: 3, bright: 1.1, rasp: 0.5, rumble: 0.6, turbo: 1, pops: 0.05, waves: ['sawtooth', 'sawtooth', 'triangle'] },
+  carro10: { firing: 4, bright: 1.4, rasp: 0.5, rumble: 0.8, turbo: 1, pops: 0.06, waves: ['sawtooth', 'square', 'sawtooth'] },
+  carro11: { firing: 3, bright: 0.75, rasp: 0.5, rumble: 1.2, turbo: 0, pops: 0.03, waves: ['sawtooth', 'square', 'sawtooth'] },
+  carro12: { firing: 3, bright: 1.3, rasp: 0.45, rumble: 0.4, turbo: 1, pops: 0.02, waves: ['sawtooth', 'triangle', 'sawtooth'] },
+  carro13: { firing: 2, bright: 0.7, rasp: 0.7, rumble: 1.4, turbo: 1, pops: 0, waves: ['sawtooth', 'square', 'square'] },
+  carro14: { firing: 4, bright: 0.8, rasp: 0.55, rumble: 1.5, turbo: 0, pops: 0.06, waves: ['sawtooth', 'square', 'sawtooth'] },
+  carro15: { firing: 2, bright: 0.9, rasp: 0.6, rumble: 0.5, turbo: 0, pops: 0.02, waves: ['square', 'sawtooth', 'square'] },
 };
 
 export class CarAudio {
-  constructor() { this.ctx = null; this.muted = false; this.on = false; this.prof = PROFILES.camaro; this.boost = 0; this.lastThr = 0; this.hitT = 0; this.popped = 0; }
-  get vol() { return 0.5 * S.volume; }
-  setProfile(id) { this.prof = PROFILES[id] || PROFILES.camaro; if (this.on) this._wave(); }
+  constructor() { this.ctx = null; this.muted = false; this.on = false; this.prof = PROFILES.carro1; this.boost = 0; this.lastThr = 0; this.hitT = 0; this.popped = 0; }
+  get vol() { return S.muteAll ? 0 : 0.5 * S.volume * S.sfx; }
+  setProfile(id) { this.prof = PROFILES[id] || PROFILES.carro1; if (this.on) this._wave(); }
   _wave() { const w = this.prof.waves; this.o.forEach(([o], i) => { o.type = w[i]; }); }
   start() {
     if (this.ctx) { this.ctx.resume(); return; }
@@ -58,7 +79,9 @@ export class CarAudio {
     for (let i = 0; i < n; i++) setTimeout(() => { if (this.on && !this.muted) this._burst(480 + Math.random() * 520, 0.05 + Math.random() * 0.04, 0.09 + Math.random() * 0.1); }, i * (55 + Math.random() * 45));
   }
   update(s) {
-    if (!this.on) return; const C = this.ctx, t = C.currentTime, P = this.prof, thr = s.thr, red = s.redline || 7500, rr = Math.min(1, s.rpm / red);
+    if (!this.on) return;
+    const sf = (x, d = 0) => (Number.isFinite(x) ? x : d);   // o áudio recusa NaN/Infinity: valor ruim vira um padrão seguro
+    s = { rpm: sf(s.rpm, 900), thr: sf(s.thr), speed: sf(s.speed), squeal: sf(s.squeal), offroad: !!s.offroad, redline: sf(s.redline, 7500) || 7500 }; const C = this.ctx, t = C.currentTime, P = this.prof, thr = s.thr, red = s.redline || 7500, rr = Math.min(1, s.rpm / red);
     const f = (s.rpm / 60) * P.firing;
     this.o[0][0].frequency.setTargetAtTime(f, t, 0.03); this.o[1][0].frequency.setTargetAtTime(f * 0.5, t, 0.03); this.o[2][0].frequency.setTargetAtTime(f * 2.01, t, 0.03);
     this.sub[0].frequency.setTargetAtTime(Math.max(26, f * 0.25), t, 0.05); this.sub[1].gain.setTargetAtTime(0.8 * Math.max(0.6, P.rumble) * (0.55 + 0.45 * thr), t, 0.08);

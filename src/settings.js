@@ -1,6 +1,6 @@
 // settings.js — opções do jogador (guardadas no navegador) e tradução (pt/en).
 const KEY = 'opts_v1';
-export const DEFAULTS = { lang: 'pt', volume: 0.8, music: 0.5, quality: 'auto', treeRange: 1, steerSens: 1, autoGear: true, abs: true, tc: true, stab: 0.6, cornerAssist: true, arcade: true, units: 'kmh', mirror: true, cycle: 'slow', damageHud: true, fx: true };
+export const DEFAULTS = { lang: 'pt', volume: 0.8, music: 0.7, sfx: 1, muteAll: false, musicOn: true, musicRace: true, shuffle: false, repeatOne: false, quality: 'auto', treeRange: 1, steerSens: 1, autoGear: true, abs: true, tc: true, stab: 0.6, cornerAssist: true, arcade: true, units: 'kmh', mirror: true, cycle: 'slow', damageHud: true, fx: true };
 export const S = (() => { try { return { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(KEY)) || {}) }; } catch { return { ...DEFAULTS }; } })();
 export const saveSettings = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
 export const setOpt = (k, v) => { S[k] = v; saveSettings(); dispatchEvent(new CustomEvent('optionschange', { detail: k })); };
@@ -9,11 +9,11 @@ const D = {
   pt: {
     appTitle: 'CORRIDA', tagline: 'Simulador de corrida', start: 'Iniciar', pressKey: 'Pressione Enter ou Espaço', options: 'Opções', close: 'Fechar',
     garage: 'Garagem', car: 'Carro', color: 'Cor', otherColor: 'Outra cor', finish: 'Acabamento', demo: 'Demonstração', headlights: 'Faróis', brake: 'Freio', spin: 'Rodar',
-    dragHint: 'Arraste para girar · roda do mouse para aproximar', race: 'Corrida', mode: 'Modo', modeRace: 'Corrida contra bots', modeTT: 'Contra-relógio (fantasma)', modeChamp: 'Campeonato (3 pistas)',
+    dragHint: 'Arraste para girar · roda do mouse para aproximar', race: 'Corrida', mode: 'Modo', modeRace: 'Corrida contra bots', modeTT: 'Contra-relógio (fantasma)', modeChamp: 'Campeonato (9 pistas)',
     track: 'Pista', reverse: 'Sentido inverso', laps: 'Voltas', difficulty: 'Dificuldade', easy: 'Fácil', normal: 'Normal', hard: 'Difícil', back: 'Voltar', ready: 'Pronto', record: 'Recorde', noRecord: 'sem recorde',
     champNote: 'O campeonato percorre todas as pistas e soma pontos.',
     optGraphics: 'Gráficos', optQuality: 'Qualidade', qAuto: 'Automática', qLow: 'Baixa', qMed: 'Média', qHigh: 'Alta', optTrees: 'Alcance das árvores', optMirror: 'Retrovisor', optCycle: 'Ciclo de horário', cycOff: 'Desligado', cycSlow: 'Lento', cycFast: 'Rápido', optDamage: 'Indicador de dano', optFx: 'Realismo extra (reflexos, raios de sol, cor de cinema)',
-    optAudio: 'Som', optVolume: 'Volume geral', optMusic: 'Música dos menus', optControls: 'Controles', optSteer: 'Sensibilidade da direção', optAuto: 'Câmbio automático', optAbs: 'ABS', optTc: 'Controle de tração', optStab: 'Estabilidade', optCorner: 'Ajuda nas curvas (soltar o acelerador já freia)', optArcade: 'Direção fácil (arcade, como no Old Racers)', optUnits: 'Unidade de velocidade', optLang: 'Idioma', keysTitle: 'Ver teclas',
+    optAudio: 'Som', optVolume: 'Volume geral', optMusic: 'Música dos menus', optControls: 'Controles', optSteer: 'Sensibilidade da direção', optAuto: 'Câmbio automático', optAbs: 'ABS', optTc: 'Controle de tração', optStab: 'Estabilidade', optCorner: 'Ajuda nas curvas (soltar o acelerador já freia)', optArcade: 'Direção fácil (arcade)', optUnits: 'Unidade de velocidade', optLang: 'Idioma', keysTitle: 'Ver teclas',
     keysList: 'Y replay · H modo foto · W/S acelera/freia · A/D direção · Espaço freio de mão · Shift nitro · E/Q marchas · T câmbio · Z ABS · X tração · V estabilidade · C câmera · B retrovisor · N reiniciar · R voltar à pista · 1–4 hora do dia · G chuva · M mudo · P pausa',
     off: 'desligado', ready2: 'Pronto para largar', begin: 'Começar', pause: 'Pausa', resume: 'Continuar', restart: 'Reiniciar corrida',
     kAccel: 'acelerar / frear e ré', kSteer: 'esquerda / direita', kHand: 'freio de mão', kNitro: 'nitro', kGears: 'marcha acima / abaixo (modo manual)', kGear: 'câmbio automático ou manual', kAssists: 'ABS · controle de tração · estabilidade', kCam: 'câmera', kReset: 'voltar para a pista', kClock: 'hora do dia · chuva', kMute: 'mudo · pausa', kMirror: 'retrovisor', kRestart: 'reiniciar a corrida',
@@ -21,13 +21,19 @@ const D = {
     lap: 'Volta', best: 'Melhor', finish2: 'Chegada', go: 'Largou!', damage: 'Dano', ghost: 'Fantasma',
     result: 'Resultado', driver: 'Piloto', time: 'Tempo', bestLap: 'Melhor volta', points: 'Pts', total: 'Total', again: 'Correr de novo', nextRace: 'Próxima corrida', champEnd: 'Classificação final', newChamp: 'Novo campeonato', podium: 'Pódio', laps2: 'Voltas', round: 'Corrida', of: 'de',
     tLap: (n, t) => `Volta ${n}: ${t}`, tBestLap: 'melhor volta', tFinished: (p) => `Chegou em ${p}º`, tNewRecord: 'Novo recorde!', tBackOnTrack: 'Voltou para a pista', tCam: 'Câmera', tGearAuto: 'Câmbio automático', tGearManual: 'Câmbio manual', tAbs: (o) => 'ABS ' + (o ? 'ligado' : 'desligado'), tTc: (o) => 'Controle de tração ' + (o ? 'ligado' : 'desligado'), tStab: 'Estabilidade', tRain: 'Chuva', tNoRain: 'Sem chuva', tBright: 'Brilho', tSoundOff: 'Som desligado', tSoundOn: 'Som ligado', tRestart: 'Corrida reiniciada', tMirrorOn: 'Retrovisor ligado', tMirrorOff: 'Retrovisor desligado',
-    cams: ['Perseguição', 'Capô', 'Para-choque', 'Aérea'], skills: { rafa: 'agressivo', duda: 'cauteloso', leo: 'equilibrado', bia: 'agressiva', caio: 'errático' },
+    tabSound: 'Som', tabGraphics: 'Gráficos', tabControls: 'Controles', tabGeneral: 'Geral', optSecVolume: 'Volumes', optMasterVol: 'Volume geral', optMusicVol: 'Música', optSfx: 'Motor e efeitos', optMuteAll: 'Silenciar tudo',
+    optSecMusic: 'Música', optMusicOn: 'Tocar música', optMusicRace: 'Música durante a corrida', optShuffle: 'Ordem aleatória', optRepeatOne: 'Repetir a faixa atual', musicTrack: (n) => `Música ${n}`,
+    musicMissing: 'arquivo não encontrado', musicNone: 'Sem músicas (veja a pasta sounds/)', musicHelp: 'Coloque os arquivos music1 … music7 (.mp3) na pasta sounds/', nowPlaying: 'Tocando', prevTrack: 'Faixa anterior', nextTrack: 'Próxima faixa', playPause: 'Tocar / pausar', tMusic: 'Música',
+    kMusic: 'faixa anterior / próxima · tocar-pausar música', menuPlay: 'Jogar', menuOptions: 'Opções', menuHint: 'Enter ou Espaço para jogar', menuPlay2: 'jogar', menuSub: 'Corrida realista no navegador', menuLoading: 'Carregando…', soundOn: 'Clique para ativar o som',
+    resetOpts: 'Restaurar padrões',
+    modeScreen: 'Modo de jogo', startRace: 'Largar', mdRace: 'Largue com os bots e dispute posições.', mdTT: 'Sozinho contra o seu melhor tempo (fantasma).', mdChamp: 'Todas as pistas, somando pontos.', yourCar: 'Seu carro', changeCar: 'Trocar carro', mapsSoon: 'Mais mapas em breve',
+    cams: ['3ª pessoa (atrás)', '1ª pessoa (motorista)', '2ª pessoa (capô)'], skills: { rafa: 'agressivo', duda: 'cauteloso', leo: 'equilibrado', bia: 'agressiva', caio: 'errático' },
     arrowL: 'curva à esquerda', arrowR: 'curva à direita', hairpin: 'grampo', loading: 'Carregando…',
   },
   en: {
     appTitle: 'RACING', tagline: 'Racing simulator', start: 'Start', pressKey: 'Press Enter or Space', options: 'Options', close: 'Close',
     garage: 'Garage', car: 'Car', color: 'Color', otherColor: 'Custom color', finish: 'Finish', demo: 'Demo', headlights: 'Headlights', brake: 'Brake', spin: 'Rotate',
-    dragHint: 'Drag to rotate · mouse wheel to zoom', race: 'Race', mode: 'Mode', modeRace: 'Race against bots', modeTT: 'Time trial (ghost)', modeChamp: 'Championship (3 tracks)',
+    dragHint: 'Drag to rotate · mouse wheel to zoom', race: 'Race', mode: 'Mode', modeRace: 'Race against bots', modeTT: 'Time trial (ghost)', modeChamp: 'Championship (9 tracks)',
     track: 'Track', reverse: 'Reverse direction', laps: 'Laps', difficulty: 'Difficulty', easy: 'Easy', normal: 'Normal', hard: 'Hard', back: 'Back', ready: 'Ready', record: 'Record', noRecord: 'no record',
     champNote: 'The championship runs every track and adds up points.',
     optGraphics: 'Graphics', optQuality: 'Quality', qAuto: 'Automatic', qLow: 'Low', qMed: 'Medium', qHigh: 'High', optTrees: 'Tree draw distance', optMirror: 'Rear-view mirror', optCycle: 'Time-of-day cycle', cycOff: 'Off', cycSlow: 'Slow', cycFast: 'Fast', optDamage: 'Damage indicator', optFx: 'Extra realism (reflections, sun rays, film look)',
@@ -39,7 +45,13 @@ const D = {
     lap: 'Lap', best: 'Best', finish2: 'Finished', go: 'Go!', damage: 'Damage', ghost: 'Ghost',
     result: 'Results', driver: 'Driver', time: 'Time', bestLap: 'Best lap', points: 'Pts', total: 'Total', again: 'Race again', nextRace: 'Next race', champEnd: 'Final standings', newChamp: 'New championship', podium: 'Podium', laps2: 'Laps', round: 'Race', of: 'of',
     tLap: (n, t) => `Lap ${n}: ${t}`, tBestLap: 'best lap', tFinished: (p) => `Finished ${p}${['th', 'st', 'nd', 'rd'][p] && ![11, 12, 13].includes(p) ? ['th', 'st', 'nd', 'rd'][p] : 'th'}`, tNewRecord: 'New record!', tBackOnTrack: 'Back on track', tCam: 'Camera', tGearAuto: 'Automatic gearbox', tGearManual: 'Manual gearbox', tAbs: (o) => 'ABS ' + (o ? 'on' : 'off'), tTc: (o) => 'Traction control ' + (o ? 'on' : 'off'), tStab: 'Stability', tRain: 'Rain', tNoRain: 'No rain', tBright: 'Brightness', tSoundOff: 'Sound off', tSoundOn: 'Sound on', tRestart: 'Race restarted', tMirrorOn: 'Mirror on', tMirrorOff: 'Mirror off',
-    cams: ['Chase', 'Hood', 'Bumper', 'Aerial'], skills: { rafa: 'aggressive', duda: 'cautious', leo: 'balanced', bia: 'aggressive', caio: 'erratic' },
+    tabSound: 'Sound', tabGraphics: 'Graphics', tabControls: 'Controls', tabGeneral: 'General', optSecVolume: 'Volumes', optMasterVol: 'Master volume', optMusicVol: 'Music', optSfx: 'Engine & effects', optMuteAll: 'Mute everything',
+    optSecMusic: 'Music', optMusicOn: 'Play music', optMusicRace: 'Music during the race', optShuffle: 'Shuffle', optRepeatOne: 'Repeat current track', musicTrack: (n) => `Music ${n}`,
+    musicMissing: 'file not found', musicNone: 'No music files (see sounds/ folder)', musicHelp: 'Put music1 … music7 (.mp3) files in the sounds/ folder', nowPlaying: 'Now playing', prevTrack: 'Previous track', nextTrack: 'Next track', playPause: 'Play / pause', tMusic: 'Music',
+    kMusic: 'previous / next track · play-pause music', menuPlay: 'Play', menuOptions: 'Options', menuHint: 'Press Enter or Space to play', menuPlay2: 'play', menuSub: 'Realistic racing in your browser', menuLoading: 'Loading…', soundOn: 'Click to enable sound',
+    resetOpts: 'Restore defaults',
+    modeScreen: 'Game mode', startRace: 'Start', mdRace: 'Race the bots and fight for positions.', mdTT: 'Alone against your best time (ghost).', mdChamp: 'Every track, adding up points.', yourCar: 'Your car', changeCar: 'Change car', mapsSoon: 'More maps soon',
+    cams: ['3rd person (chase)', '1st person (driver)', '2nd person (hood)'], skills: { rafa: 'aggressive', duda: 'cautious', leo: 'balanced', bia: 'aggressive', caio: 'erratic' },
     arrowL: 'left turn', arrowR: 'right turn', hairpin: 'hairpin', loading: 'Loading…',
   },
 };

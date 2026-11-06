@@ -2,6 +2,7 @@
 // e malhas de asfalto, zebras (kerbs) e linha de largada.
 import * as THREE from 'three';
 import { smooth } from './noise.js';
+import { EXTRA_TRACKS } from './tracksData.js';
 
 // pontos de controle (x, z) em metros. Frente do carro = +Z.
 export const CONTROL = [
@@ -13,6 +14,11 @@ export const TRACKS = [
   { id: 't2', name: 'Planalto', control: [[0,-220],[170,-235],[330,-200],[420,-110],[400,10],[290,70],[170,40],[90,110],[120,210],[240,270],[250,380],[120,430],[-40,400],[-150,310],[-130,190],[-250,130],[-340,20],[-300,-110],[-170,-180]] },
   { id: 't3', name: 'Serra', control: [[0,-300],[180,-320],[350,-290],[470,-200],[480,-60],[400,40],[260,60],[170,150],[200,280],[330,360],[290,480],[140,520],[20,450],[-70,340],[-210,360],[-330,290],[-340,160],[-230,70],[-310,-30],[-400,-130],[-330,-250],[-180,-290]] },
 ];
+// tema de mundo (themes.js) e relevo da pista; as pistas extras vêm de tracksData.js
+Object.assign(TRACKS[0], { theme: 'verde', elev: 1 }); Object.assign(TRACKS[1], { theme: 'planalto', elev: 1 }); Object.assign(TRACKS[2], { theme: 'serra', elev: 1 });
+TRACKS.push(...EXTRA_TRACKS);
+/** opções do Track de uma pista (relevo da elevação) */
+export const trackOpts = (id) => ({ elev: (TRACKS.find((x) => x.id === id) || TRACKS[0]).elev ?? 1 });
 /** pontos de controle de uma pista (rev = sentido inverso, mantendo o ponto de largada) */
 export const trackControl = (id, rev = false) => {
   const t = TRACKS.find((x) => x.id === id) || TRACKS[0], c = t.control.map((p) => p.slice());
@@ -21,7 +27,7 @@ export const trackControl = (id, rev = false) => {
 export const HALF = 6;   // meia largura do asfalto (m)
 
 export class Track {
-  constructor(control = CONTROL) {
+  constructor(control = CONTROL, { elev = 1 } = {}) {
     const curve = new THREE.CatmullRomCurve3(control.map(([x, z]) => new THREE.Vector3(x, 0, z)), true, 'centripetal');
     const L0 = curve.getLength();
     const N = Math.round(L0 / 2.5);
@@ -31,7 +37,7 @@ export class Track {
     const S = [];
     for (let i = 0; i < N; i++) {
       const u = i / N, p = pts[i];
-      const y = 8 * Math.sin(2 * Math.PI * u + 0.6) + 4 * Math.sin(6 * Math.PI * u + 2.1) + 2 * Math.sin(10 * Math.PI * u);
+      const y = elev * (8 * Math.sin(2 * Math.PI * u + 0.6) + 4 * Math.sin(6 * Math.PI * u + 2.1) + 2 * Math.sin(10 * Math.PI * u));
       S.push({ x: p.x, y, z: p.z, s: i * this.ds });
     }
     for (let i = 0; i < N; i++) {
@@ -71,7 +77,9 @@ export class Track {
     return { i: best, d: Math.sqrt(bd), lat: (x - p.x) * p.nx + (z - p.z) * p.nz };
   }
   /** busca local (rápida) usando o índice anterior como dica. Retorna { i, d, lat, along } */
-  locate(x, z, hint) {
+  locate(x, z, hint) { return this.locateTo({ i: 0, d: 0, lat: 0, along: 0 }, x, z, hint); }
+  /** igual a locate(), mas escreve o resultado em `o` (sem criar objeto: roda 1000x por segundo na física) */
+  locateTo(o, x, z, hint) {
     const N = this.N, S = this.S; let best = -1, bd = 1e18;
     if (hint != null && hint >= 0) {
       for (let k = -14; k <= 14; k++) { const i = (hint + k + N) % N, p = S[i], d = (p.x - x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = i; } }
@@ -79,7 +87,12 @@ export class Track {
     }
     if (best < 0) { const q = this.nearest(x, z, 3000); best = q.i; bd = q.d * q.d; }
     const p = S[best];
-    return { i: best, d: Math.sqrt(bd), lat: (x - p.x) * p.nx + (z - p.z) * p.nz, along: (x - p.x) * p.tx + (z - p.z) * p.tz };
+    o.i = best; o.d = Math.sqrt(bd); o.lat = (x - p.x) * p.nx + (z - p.z) * p.nz; o.along = (x - p.x) * p.tx + (z - p.z) * p.tz; return o;
+  }
+  /** só a curvatura em s (mesmo valor de at(s).k, sem criar objeto) */
+  kAt(s) {
+    const f = ((s / this.ds) % this.N + this.N) % this.N, i = Math.floor(f), t = f - i, a = this.S[i], b = this.S[(i + 1) % this.N];
+    return a.k + (b.k - a.k) * t;
   }
   at(s) {   // amostra interpolada por distância
     const f = ((s / this.ds) % this.N + this.N) % this.N, i = Math.floor(f), t = f - i, a = this.S[i], b = this.S[(i + 1) % this.N];

@@ -1,6 +1,8 @@
 // worldBuilder.js — monta o cenário completo (pista, terreno, vegetação, céu) e devolve tudo o que o jogo precisa.
 import * as THREE from 'three';
-import { Track, trackControl } from './trackBuilder.js';
+import { Track, trackControl, trackOpts, TRACKS } from './trackBuilder.js';
+import { themeOf } from './themes.js';
+import { buildProps, buildWater } from './props.js';
 import { Terrain } from './terrain.js';
 import { Vegetation } from './vegetation.js';
 import { SkyWeather } from './skyWeather.js';
@@ -14,22 +16,23 @@ import { FX } from './fxShared.js';
 const VENUE = false;
 import { buildVenue, venueZones } from './venue.js';
 
-export async function buildWorld({ scene, renderer, camera, say = async () => {}, density = 1, trackId = 't1', reverse = false }) {
+export async function buildWorld({ scene, renderer, camera, say = async () => {}, density = 1, trackId = 't1', reverse = false, lite = false }) {
   await say('Traçando a pista…');
-  const track = new Track(trackControl(trackId, reverse));
+  const theme = themeOf((TRACKS.find((x) => x.id === trackId) || TRACKS[0]).theme);   // mundo do mapa (themes.js)
+  const track = new Track(trackControl(trackId, reverse), trackOpts(trackId));
   track.zones = VENUE ? venueZones(track) : [];
   { // névoa por altura: o "nível do vale" é um pouco abaixo da altura média da pista
     let sy = 0; for (const p of track.S) sy += p.y; sy /= track.S.length;
     try { installFogPatch({ refY: sy - 6 }); } catch (e) { console.warn('fogpatch', e); }
   }
   await say('Gerando o terreno…');
-  const terrain = new Terrain(track);
+  const terrain = new Terrain(track, lite ? { theme, cell: 8, margin: 420 } : { theme });
   const sw = new SkyWeather(scene, renderer, camera);
   await say('Carregando árvores e pedras…');
   const veg = new Vegetation(scene, terrain, track);
-  await veg.load('assets/nature/', renderer);
+  await veg.load('nature/', renderer);
   await say('Plantando a floresta…');
-  veg.build({ density });
+  veg.build({ density, theme });
   const tex = { grass: TX.grassTexture(), dirt: TX.dirtTexture(), gravel: TX.gravelTexture(), noise: TX.noiseTexture(), rock: veg.mat.rock.map };
   scene.add(terrain.mesh(tex));
   const asphalt = TX.asphaltTexture();
@@ -39,12 +42,18 @@ export async function buildWorld({ scene, renderer, camera, say = async () => {}
   scene.add(track.kerbMesh(new THREE.MeshStandardMaterial({ map: TX.kerbTexture(), roughness: 0.6, envMapIntensity: 0.5, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })));
   scene.add(track.startLine(new THREE.MeshStandardMaterial({ map: TX.checkerTexture(), roughness: 0.7 })));
   const side = buildTrackside(scene, track, terrain);
+  await say('Montando o cenário…');
+  const props = buildProps(scene, track, terrain, theme);       // palmeiras, prédios, cercas… (props.js)
+  for (const c of props.colliders) side.colliders.push(c);
+  const water = theme.water ? buildWater(scene, theme.water, FX.time) : null;
   if (VENUE) buildVenue(scene, track, terrain, side.colliders);
+  const wetBase = (theme.road && theme.road.wet) || 0, roadTint = new THREE.Color(...((theme.road && theme.road.tint) || [1, 1, 1]));
   let lastWet = -1;
   const applyWet = (w) => {
     if (Math.abs(w - lastWet) < 0.01) return; lastWet = w;
-    roadMat.roughness = lerp(0.88, 0.16, w); roadMat.color.setScalar(lerp(1, 0.55, w)); roadMat.envMapIntensity = lerp(0.45, 1.7, w);
-    terrain.uniforms.uWet.value = w; veg.setWet(w); FX.rwet.value = w;
+    const wr = Math.max(w, wetBase);   // asfalto sempre úmido em alguns mapas (cidade à noite, neve)
+    roadMat.roughness = lerp(0.88, 0.16, wr); roadMat.color.setScalar(lerp(1, 0.55, wr)).multiply(roadTint); roadMat.envMapIntensity = lerp(0.45, 1.7, wr);
+    terrain.uniforms.uWet.value = w; veg.setWet(w); FX.rwet.value = wr;
   };
-  return { track, terrain, veg, sw, roadMat, applyWet, side };
+  return { track, terrain, veg, sw, roadMat, applyWet, side, theme, props, water };
 }

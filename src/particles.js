@@ -18,21 +18,27 @@ export class Burst {
       fragmentShader: `varying float vA; varying vec3 vC; void main(){ vec2 d = gl_PointCoord - 0.5; float r = length(d) * 2.0; float a = smoothstep(1.0, 0.25, r) * vA; if (a < 0.01) discard; gl_FragColor = vec4(vC, a); }`,
     });
     this.mesh = new THREE.Points(g, this.m); this.mesh.frustumCulled = false; scene.add(this.mesh); this.geo = g; this.additive = additive;
+    this.alive = true; this.colDirty = true;   // sem partículas vivas: nada é calculado, enviado à GPU nem desenhado (a malha fica oculta)
   }
   emit(x, y, z, vx, vy, vz, life, size, r, gr, b, groundY) {
     const i = this.i = (this.i + 1) % this.N, j = i * 3;
     this.p[j] = x; this.p[j + 1] = y; this.p[j + 2] = z; this.v[j] = vx; this.v[j + 1] = vy; this.v[j + 2] = vz;
     this.life[i] = this.max[i] = life; this.size[i] = size; this.col[j] = r; this.col[j + 1] = gr; this.col[j + 2] = b; this.gy[i] = groundY != null ? groundY : y - 0.2;
+    this.alive = true; this.colDirty = true; this.mesh.visible = true;
   }
   update(dt, scale) {
     if (scale) this.m.uniforms.uScale.value = scale;
+    if (!this.alive) return;
+    let n = 0;
     for (let i = 0; i < this.N; i++) {
       if (this.life[i] <= 0) { this.alpha[i] = 0; continue; }
-      this.life[i] -= dt; const j = i * 3, t = 1 - this.life[i] / this.max[i];
+      n++; this.life[i] -= dt; const j = i * 3, t = 1 - this.life[i] / this.max[i];
       this.v[j + 1] -= this.g * dt; this.p[j] += this.v[j] * dt; this.p[j + 1] += this.v[j + 1] * dt; this.p[j + 2] += this.v[j + 2] * dt;
       if (this.p[j + 1] < this.gy[i]) { this.p[j + 1] = this.gy[i]; this.v[j + 1] *= -0.32; this.v[j] *= 0.6; this.v[j + 2] *= 0.6; }
       this.alpha[i] = this.additive ? (1 - t) * (1 - t) : Math.min(1, (1 - t) * 2.2) * 0.9; this.sz[i] = this.size[i] * (this.additive ? 1 - 0.5 * t : 1);
     }
-    const a = this.geo.attributes; a.position.needsUpdate = a.aA.needsUpdate = a.aS.needsUpdate = a.aC.needsUpdate = true;
+    const a = this.geo.attributes; a.position.needsUpdate = a.aA.needsUpdate = a.aS.needsUpdate = true;
+    if (this.colDirty) { a.aC.needsUpdate = true; this.colDirty = false; }   // a cor só muda quando nasce uma partícula
+    if (n === 0) { this.alive = false; this.mesh.visible = false; }          // este quadro ainda enviou os alfas zerados
   }
 }

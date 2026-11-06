@@ -13,7 +13,7 @@ export function safeSpeed(track, idx, spec, wet = 0, look = 300, veh = null) {
   const mu = spec.mu * (1 - 0.28 * wet) * 0.8, aB = arcade ? 16 : spec.brakeG * (1 - 0.25 * wet) * G * 0.6;
   let target = 1e9;
   for (let d = 0; d <= look; d += 8) {
-    const k = Math.max(Math.abs(track.at(s0 + d).k), 1e-4); let vc;
+    const k = Math.max(Math.abs(track.kAt(s0 + d)), 1e-4); let vc;
     if (arcade) { vc = 40; for (let i = 0; i < 6; i++) vc = clamp(0.9 * yawMax(vc) / k, 8, 120); }   // u tal que u·k = 90% do giro máximo em u
     else vc = Math.sqrt(mu * G / k);
     target = Math.min(target, Math.sqrt(vc * vc + 2 * aB * d));

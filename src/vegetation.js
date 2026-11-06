@@ -21,28 +21,30 @@ const FILES = {
 const TREE_W = [1.0, 1.0, 0.6, 0.5], PINE_W = [0.6, 0.6, 1.2, 0.8];
 
 // ---------------------------------------------------------------- planejamento (sem 3D, testável)
-export function planForest(track, terrain, { density = 1, seed = 11 } = {}) {
+export function planForest(track, terrain, { density = 1, seed = 11, theme = null } = {}) {
+  // ajustes do tema do mapa (themes.js → veg); o padrão (tudo 1) é exatamente a floresta original
+  const V = Object.assign({ forest: 1, scatter: 1, pine: null, size: 1, tint: [1, 1, 1], grass: 1, grassTint: [1, 1, 1], rocks: 1, pebbles: 1 }, theme && theme.veg);
   const R = rng(seed), n = terrain.noise, out = { trees: [], rocks: [], pebbles: [], grass: [] };
   const step = 7 / Math.sqrt(density), pick = (w) => { let t = R() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < w.length; i++) { t -= w[i]; if (t <= 0) return i; } return w.length - 1; };
   for (let z = terrain.z0; z < terrain.z0 + terrain.h; z += step) for (let x = terrain.x0; x < terrain.x0 + terrain.w; x += step) {
     const px = x + (R() - 0.5) * step * 0.95, pz = z + (R() - 0.5) * step * 0.95, d = terrain.distAt(px, pz);
     if (d < 16 || d > 480) continue;
     const forest = smooth(-0.12, 0.32, n.fbm(px / 170 + 30, pz / 170 - 12, 3)), edge = smooth(16, 50, d);
-    if (R() > forest * edge * 0.95 + edge * 0.03) continue;
+    if (R() > forest * V.forest * edge * 0.95 + edge * 0.03 * V.scatter) continue;
     if (terrain.slopeAt(px, pz) > 0.75) continue;
     const y = terrain.heightAt(px, pz);
-    const pineP = smooth(-0.2, 0.25, n.fbm(px / 260 - 50, pz / 260 + 80, 2)) * 0.65 + smooth(25, 85, y) * 0.5;
+    const pineP = V.pine != null ? V.pine + smooth(25, 85, y) * 0.15 : smooth(-0.2, 0.25, n.fbm(px / 260 - 50, pz / 260 + 80, 2)) * 0.65 + smooth(25, 85, y) * 0.5;
     const pine = R() < pineP, v = pine ? pick(PINE_W) : pick(TREE_W);
-    out.trees.push({ pine, v, x: px, y, z: pz, rot: R() * 6.283, sc: 0.8 + R() * R() * 0.9 + (pine ? 0.15 : 0), tx: (R() - 0.5) * 0.06, tz: (R() - 0.5) * 0.06, tint: [0.88 + R() * 0.24, 0.9 + R() * 0.2, 0.7 + R() * 0.3] });
+    out.trees.push({ pine, v, x: px, y, z: pz, rot: R() * 6.283, sc: (0.8 + R() * R() * 0.9 + (pine ? 0.15 : 0)) * V.size, tx: (R() - 0.5) * 0.06, tz: (R() - 0.5) * 0.06, tint: [(0.88 + R() * 0.24) * V.tint[0], (0.9 + R() * 0.2) * V.tint[1], (0.7 + R() * 0.3) * V.tint[2]] });
   }
   const S = track.S;
   for (let i = 0; i < track.N; i += 4) for (const side of [-1, 1]) {
-    if (R() < 0.55) continue;
+    if (R() < 1 - 0.45 * V.rocks) continue;
     const o = side * (HALF + 5 + R() * 35), p = S[i], x = p.x + p.nx * o, z = p.z + p.nz * o;
     out.rocks.push({ v: (R() * 3) | 0, x, y: terrain.heightAt(x, z), z, rot: R() * 6.283, sc: 0.7 + R() * R() * 2.4, tilt: [(R() - 0.5) * 0.3, (R() - 0.5) * 0.3] });
   }
   let clusters = 0;
-  for (let k = 0; k < 6000 && clusters < 260; k++) {
+  for (let k = 0; k < 6000 && clusters < 260 * V.rocks; k++) {
     const x = terrain.x0 + R() * terrain.w, z = terrain.z0 + R() * terrain.h, d = terrain.distAt(x, z);
     if (d < 28 || d > 420 || terrain.slopeAt(x, z) < 0.42) continue;
     clusters++;
@@ -52,10 +54,10 @@ export function planForest(track, terrain, { density = 1, seed = 11 } = {}) {
   }
   for (let i = 0; i < track.N; i++) for (const side of [-1, 1]) {
     const p = S[i];
-    for (let q = 0; q < 10; q++) { const o = side * (HALF + 0.5 + R() * R() * 18), x = p.x + p.nx * o + (R() - 0.5) * 2, z = p.z + p.nz * o + (R() - 0.5) * 2;
+    for (let q = 0, qn = Math.round(10 * V.pebbles); q < qn; q++) { const o = side * (HALF + 0.5 + R() * R() * 18), x = p.x + p.nx * o + (R() - 0.5) * 2, z = p.z + p.nz * o + (R() - 0.5) * 2;
       out.pebbles.push({ v: (R() * 2) | 0, x, y: terrain.heightAt(x, z), z, rot: R() * 6.283, sc: 0.6 + R() * 1.6 }); }
-    for (let q = 0; q < 24; q++) { const o = side * (HALF + 3 + R() * 36), x = p.x + p.nx * o + (R() - 0.5) * 2.4, z = p.z + p.nz * o + (R() - 0.5) * 2.4;
-      out.grass.push({ x, y: terrain.heightAt(x, z), z, rot: R() * 6.283, sc: 0.7 + R() * 0.9, tint: [0.85 + R() * 0.3, 0.9 + R() * 0.25, 0.7 + R() * 0.3] }); }
+    for (let q = 0, qn = Math.round(24 * V.grass); q < qn; q++) { const o = side * (HALF + 3 + R() * 36), x = p.x + p.nx * o + (R() - 0.5) * 2.4, z = p.z + p.nz * o + (R() - 0.5) * 2.4;
+      out.grass.push({ x, y: terrain.heightAt(x, z), z, rot: R() * 6.283, sc: 0.7 + R() * 0.9, tint: [(0.85 + R() * 0.3) * V.grassTint[0], (0.9 + R() * 0.25) * V.grassTint[1], (0.7 + R() * 0.3) * V.grassTint[2]] }); }
   }
   const Z = track.zones || [];
   if (Z.length) for (const k of Object.keys(out)) out[k] = out[k].filter((o) => !Z.some((q) => (o.x - q.x) * (o.x - q.x) + (o.z - q.z) * (o.z - q.z) < q.r * q.r));
@@ -165,17 +167,40 @@ if (k < dn) discard; }`);
   mat.customProgramCacheKey = () => base + 'fd' + key;
 }
 
-// imagem do modelo (2 vistas, cor sem sombra) renderizada uma vez numa textura
-function bakeImpostor(renderer, P) {
+// imagem do modelo (2 vistas, cor sem sombra) renderizada uma vez numa textura.
+// Cada impostor era desenhado num alvo MSAA 4x próprio (1024x768 em meia precisão = ~38 MB de buffers multisample por árvore, x8 = ~300 MB
+// de memória de vídeo que ficavam alocados o jogo inteiro só para esta imagem pronta). Agora o resultado é copiado (pixel a pixel, idêntico,
+// mipmaps inclusive — conferido) para uma textura simples e o alvo MSAA é liberado na hora.
+const IMP_W = 512, IMP_H = 768;
+export function makeBakeTarget() {
+  const rt = new THREE.WebGLRenderTarget(IMP_W * 2, IMP_H, { type: THREE.HalfFloatType, depthBuffer: true, samples: 4 });
+  rt.scissorTest = true; return rt;
+}
+let _cp = null;
+function copyToPlain(renderer, srcTex) {
+  const W = srcTex.image.width, H = srcTex.image.height;
+  const dst = new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
+  if (!_cp) {
+    const mat = new THREE.ShaderMaterial({ uniforms: { tMap: { value: null } }, depthTest: false, depthWrite: false,
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: 'uniform sampler2D tMap; varying vec2 vUv; void main(){ gl_FragColor = texture2D(tMap, vUv); }' });
+    const scn = new THREE.Scene(), q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat); q.frustumCulled = false; scn.add(q);
+    _cp = { scn, mat, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1) };
+  }
+  _cp.mat.uniforms.tMap.value = srcTex;
+  renderer.setRenderTarget(dst); renderer.render(_cp.scn, _cp.cam);
+  _cp.mat.uniforms.tMap.value = null;
+  return dst;
+}
+export function bakeImpostor(renderer, P) {
   const mkBasic = (m, cut) => new THREE.MeshBasicMaterial({ map: m.map, vertexColors: true, alphaTest: cut ? 0.45 : 0, side: THREE.DoubleSide });
   const g = new THREE.Group();
   g.add(new THREE.Mesh(P.bark.geo, mkBasic(P.bark.mat, false)), new THREE.Mesh(P.leaves.geo, mkBasic(P.leaves.mat, true)));
   const box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
-  const TW = 512, TH = 768;
+  const TW = IMP_W, TH = IMP_H;
   let qh = size.y * 1.04, qw = qh * TW / TH; const need = Math.max(size.x, size.z) * 1.04; if (need > qw) { qw = need; qh = qw * TH / TW; }
   const cam = new THREE.OrthographicCamera(-qw / 2, qw / 2, qh / 2, -qh / 2, 0.1, 200);
-  const rt = new THREE.WebGLRenderTarget(TW * 2, TH, { type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, samples: 4 });
-  rt.scissorTest = true;
+  const rtMS = makeBakeTarget(), rt = rtMS;
   const sc = new THREE.Scene(); sc.add(g);
   const prev = renderer.getRenderTarget(), prevClear = renderer.getClearColor(new THREE.Color()), prevA = renderer.getClearAlpha(), prevAuto = renderer.autoClear;
   renderer.setClearColor(0x4a5c1c, 0); renderer.setRenderTarget(rt);
@@ -186,9 +211,10 @@ function bakeImpostor(renderer, P) {
     rt.viewport.set(x0, 0, TW, TH); rt.scissor.set(x0, 0, TW, TH);
     cam.position.copy(pos); cam.lookAt(ctr); cam.updateMatrixWorld(); renderer.render(sc, cam);
   }
+  const plain = copyToPlain(renderer, rtMS.texture); rtMS.dispose();
   renderer.setRenderTarget(prev); renderer.setClearColor(prevClear, prevA); renderer.autoClear = prevAuto;
   g.traverse((o) => { if (o.material) o.material.dispose(); });
-  rt.texture.anisotropy = 8;
+  plain.texture.anisotropy = 8;
   // dois cartões cruzados: o primeiro usa a vista de frente (u 0..0,5), o segundo a vista lateral (u 0,5..1)
   const mk = (u0, u1, rotY) => {
     const q = new THREE.PlaneGeometry(qw, qh); const uv = q.attributes.uv;
@@ -197,11 +223,11 @@ function bakeImpostor(renderer, P) {
     const n = q.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
     return q;
   };
-  return { tex: rt.texture, geo: mergeGeometries([mk(0, 0.5, 0), mk(0.5, 1, Math.PI / 2)]) };
+  return { tex: plain.texture, geo: mergeGeometries([mk(0, 0.5, 0), mk(0.5, 1, Math.PI / 2)]) };
 }
 
 // ---------------------------------------------------------------- classe principal
-const NEAR_CELL = 128, FAR_CELL = 320, ROCK_CELL = 128, PEB_CELL = 64, GRASS_CELL = 64;
+const NEAR_CELL = 80, FAR_CELL = 320, ROCK_CELL = 128, PEB_CELL = 64, GRASS_CELL = 64;
 
 export class Vegetation {
   constructor(scene, terrain, track) {
@@ -216,7 +242,7 @@ export class Vegetation {
     this.blocks = [];
   }
 
-  async load(baseUrl = 'assets/nature/', renderer = null) {
+  async load(baseUrl = 'nature/', renderer = null) {
     const L = new GLTFLoader(), get = (f) => L.loadAsync(baseUrl + f + '.glb');
     const names = [...FILES.tree, ...FILES.pine, ...FILES.rock, ...FILES.pebble], g = await Promise.all(names.map(get));
     const G = Object.fromEntries(names.map((n, i) => [n, g[i]]));
@@ -276,9 +302,10 @@ export class Vegetation {
   }
 
   // ---------- plantio único: blocos fixos de InstancedMesh ----------
-  build({ density = 1 } = {}) {
+  build({ density = 1, theme = null } = {}) {
     this._clear();
-    const plan = this.plan = planForest(this.track, this.terrain, { density });
+    this.rockTint = new THREE.Color(...((theme && theme.veg && theme.veg.rockTint) || [1, 1, 1]));
+    const plan = this.plan = planForest(this.track, this.terrain, { density, theme });
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), S = new THREE.Vector3();
     const pack = (list, fn, withC) => {
       const n = list.length, m = new Float32Array(n * 16), c = withC ? new Float32Array(n * 3) : null;
@@ -341,6 +368,7 @@ export class Vegetation {
 
   setWet(w) {
     for (const m of [this.mat.bark, this.mat.leafTree, this.mat.leafPine, this.mat.rock]) { m.color.setScalar(1 - 0.3 * w); m.roughness = lerp(0.9, 0.55, w); }
+    if (this.rockTint) { this.mat.rock.color.multiply(this.rockTint); this.mat.pebble.color.setScalar(1).multiply(this.rockTint); }   // pedras coloridas pelo tema (deserto = vermelha)
     for (const i of this.imp) if (i) i.mat.color.setScalar(1 - 0.25 * w);
   }
 

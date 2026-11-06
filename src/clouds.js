@@ -20,8 +20,9 @@ export class Clouds {
           if (fade <= 0.001) discard;
           vec2 p = (vRel.xz + cameraPosition.xz) * 0.00042 + uWind * uTime * 0.0006;
           float d = fbm(p);
-          float dl = fbm(p + uSunDir.xz * 0.05);
           float cov = smoothstep(0.62 - uCover * 0.32, 0.86 - uCover * 0.3, d);
+          if (cov * fade * 0.92 < 0.004) discard;   // menos de 1/255 de opacidade: invisível, poupa o 2º fbm (metade do custo) no céu limpo
+          float dl = fbm(p + uSunDir.xz * 0.05);
           float lit = clamp(0.55 + (d - dl) * 3.2, 0.0, 1.0);
           vec3 shade = vec3(0.50, 0.55, 0.64) * uBright;
           vec3 sunl = mix(vec3(1.0), uSunC, 0.45 + 0.5 * uWarm) * (1.05 * uBright + 0.2);
@@ -36,7 +37,7 @@ export class Clouds {
     scene.add(this.mesh);
   }
   setPreset(key, P, sunDir) {
-    const cfg = { manha: [0.40, 0.95, 0.55], meio: [0.34, 1.0, 0.2], por: [0.5, 0.8, 1.0], nublado: [0.9, 0.55, 0.0] }[key] || [0.4, 0.9, 0.3];
+    const cfg = { manha: [0.40, 0.95, 0.55], meio: [0.34, 1.0, 0.2], por: [0.5, 0.8, 1.0], nublado: [0.9, 0.55, 0.0], noite: [0.15, 0.12, 0.0], deserto: [0.12, 1.0, 0.25], neve: [0.95, 0.62, 0.0] }[key] || [0.4, 0.9, 0.3];
     this.base = { cover: cfg[0], bright: cfg[1], warm: cfg[2] };
     this.u.uSunC.value.setHex(P.sunC); this.u.uSunDir.value.copy(sunDir);
   }

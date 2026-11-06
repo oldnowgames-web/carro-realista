@@ -1,4 +1,4 @@
-// arcade.js — "direção fácil", no jeito do Old Racers: o volante comanda o giro direto, o carro "gruda" na direção que aponta
+// arcade.js — "direção fácil": o volante comanda o giro direto, o carro "gruda" na direção que aponta
 // (a velocidade lateral some rápido), soltar o acelerador já desacelera e não existe perda de controle por excesso de velocidade.
 // Só a mecânica do corpo muda: câmbio, rpm, nitro, rodas, superfícies e colisões continuam iguais, então HUD, som e câmera funcionam igual.
 const TAU = Math.PI * 2, G = 9.81;
@@ -6,12 +6,21 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // top = velocidade máxima (m/s) · acc = aceleração (m/s²) · grip = quão rápido o carro "gruda" na direção do giro (1/s)
 const ARC = {
-  aventador:    { top: 76, acc: 25, grip: 5.2 },
-  camaro:       { top: 68, acc: 20, grip: 4.4 },
-  hatch:        { top: 60, acc: 21, grip: 6.4 },
-  sport_orange: { top: 68, acc: 23, grip: 5.8 },
-  sport_white:  { top: 70, acc: 24, grip: 5.6 },
-  sport_atlas:  { top: 72, acc: 24, grip: 5.4 },
+  carro1:    { top: 76, acc: 25, grip: 5.2 },
+  carro2:       { top: 67, acc: 21.5, grip: 4.5 },
+  carro3:        { top: 71, acc: 26, grip: 4.9 },
+  carro4:        { top: 60, acc: 21, grip: 6.4 },
+  carro5: { top: 68, acc: 23, grip: 5.8 },
+  carro6:  { top: 70, acc: 24, grip: 5.6 },
+  carro7:  { top: 72, acc: 24, grip: 5.4 },
+  carro8:  { top: 70, acc: 24, grip: 5.6 },
+  carro9:  { top: 70, acc: 24.5, grip: 5.8 },
+  carro10: { top: 78, acc: 26, grip: 5.3 },
+  carro11: { top: 62, acc: 19, grip: 4.4 },
+  carro12: { top: 75, acc: 25.5, grip: 5.5 },
+  carro13: { top: 62, acc: 20, grip: 4.4 },
+  carro14: { top: 64, acc: 20, grip: 4.6 },
+  carro15: { top: 58, acc: 19, grip: 5.2 },
 };
 export function arcSpec(v) { return ARC[v.id] || { top: 52 + v.spec.power * 0.045, acc: 14 + v.spec.power * 0.03, grip: 5 }; }
 /** taxa máxima de giro (rad/s) com o volante todo para o lado, na velocidade u */
@@ -34,7 +43,7 @@ export function stepArcade(v, dt, inp, env) {
   const dpsi = v.r * dt, c = Math.cos(dpsi), s = Math.sin(dpsi);
   { const u2 = u * c + vl * s, v2 = -u * s + vl * c; u = u2; vl = v2; }                // a velocidade (mundo) fica; o corpo gira
 
-  // ---- câmbio (por faixas de velocidade, como no Old Racers) ----
+  // ---- câmbio (por faixas de velocidade) ----
   v.shiftT = Math.max(0, v.shiftT - dt); v.shiftCd = Math.max(0, v.shiftCd - dt);
   const gmx = (g) => A.top * Math.pow(g / nG, 0.78);
   const set = (g) => { if (g !== v.gear) { v.gear = g; v.shiftT = 0.12; v.shiftCd = 0.35; } };
@@ -63,7 +72,7 @@ export function stepArcade(v, dt, inp, env) {
     else { const f = Math.max(0, 1 - Math.pow(Math.max(u, 0) / gm, 3)); a = A.acc * Math.max(0.55, 1 - 0.07 * (v.gear - 1)) * (nitM ? 2.1 : 1) * f * dv; if (u > gm) a = -4; }
   }
   if (v.shiftT > 0) a *= 0.35;
-  { const bkS = rev && as.auto ? v.thr : v.brk; if (bkS > 0.01 && Math.abs(u) > 0.3) a -= Math.sign(u) * 36 * bkS; }   // freio forte, como no Old Racers
+  { const bkS = rev && as.auto ? v.thr : v.brk; if (bkS > 0.01 && Math.abs(u) > 0.3) a -= Math.sign(u) * 36 * bkS; }   // freio forte
   if (v.hb > 0.02 && Math.abs(u) > 0.3) a -= Math.sign(u) * 7 * v.hb;
   a -= u * 0.04 + u * Math.abs(u) * 0.0006;                                            // arrasto: soltar o acelerador já desacelera
   // piso: cascalho/grama seguram o carro

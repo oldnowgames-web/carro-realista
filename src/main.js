@@ -1,5 +1,5 @@
 // main.js — liga tudo: lista de carros, cores, acabamentos, demonstração e laço de render.
-import { CAR_LIST } from './carData.js';
+import { CAR_LIST, migrateSaved } from './carData.js';
 import { loadGLB, buildCar } from './carModel.js';
 import { COLORS, FINISHES } from './paint.js';
 import { Showroom } from './showroom.js';
@@ -15,7 +15,7 @@ const room = new Showroom($('gl'));
 
 // ---------- estado salvo ----------
 const KEY = 'garage_v1';
-const saved = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } })();
+const saved = migrateSaved((() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } })());
 const state = { car: saved.car || CAR_LIST[0].id, colors: saved.colors || {}, finishes: saved.finishes || {} };
 const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
 
@@ -65,7 +65,7 @@ function refreshUI() {
     const on = b.dataset.hex.toLowerCase() === hex.toLowerCase();
     b.setAttribute('aria-pressed', String(on)); if (on) name = b.title;
   });
-  $('colorName').textContent = name; $('customColor').value = hex;
+  $('colorName').textContent = cfgNow.fixedPaint ? 'Cor original (este modelo não muda de cor)' : name; $('customColor').value = hex;
   document.querySelectorAll('.fin').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === fin)));
   const d = current.dims;
   $('specs').innerHTML = `<b>${cfgNow.name}</b>${d.length.toFixed(2)} m de comprimento · ${d.width.toFixed(2)} m de largura<br>` +

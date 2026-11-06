@@ -7,7 +7,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { buildWorld } from './worldBuilder.js';
 import { PRESETS } from './skyWeather.js';
-import { CAR_LIST } from './carData.js';
+import { CAR_LIST, migrateSaved } from './carData.js';
 import { loadGLB, buildCar } from './carModel.js';
 import { COLORS, FINISHES } from './paint.js';
 import { WorldPhysics, Racer, Race } from './race.js';
@@ -23,7 +23,9 @@ import { makeCarFx } from './carfx.js';
 import { Mirror } from './mirror.js';
 import { applyCornerAssist } from './assist.js';
 import { snapPrev, blendPose, restorePose } from './interp.js';
-import { S, t, applyI18n } from './settings.js';
+import { S, t, applyI18n, setOpt } from './settings.js';
+import { initMusic, setContext } from './music.js';
+import { mountMiniPlayer, bindMusicKeys } from './musicUI.js';
 import { TRACKS } from './trackBuilder.js';
 import { loadChamp, newChamp, addRaceResult } from './championship.js';
 import { recKey, getRec, saveRec, GhostRecorder, GhostPlayer } from './ghost.js';
@@ -45,7 +47,8 @@ if (location.protocol === 'file:') {
 }
 const Q = new URLSearchParams(location.search), DENS = clamp(+Q.get('dens') || 1, 0.4, 2);
 applyI18n();
-const FXQ = Q.get('fx') !== '0', fxOn = () => FXQ && S.fx !== false;   // efeitos extras de realismo (Opções ou ?fx=0)
+let fxBroken = false, audioWarned = false;
+const FXQ = Q.get('fx') !== '0', fxOn = () => FXQ && S.fx !== false && !fxBroken;   // efeitos extras de realismo (Opções ou ?fx=0)
 const MODE = ['race', 'tt', 'champ'].includes(Q.get('modo')) ? Q.get('modo') : 'race';
 let champ = null;
 if (MODE === 'champ') { champ = loadChamp(); if (!champ || champ.round >= champ.rounds.length) champ = newChamp({ laps: clamp(+Q.get('laps') || 3, 1, 20), dif: clamp(+Q.get('dif') || 1, 0.85, 1.1) }); }
@@ -89,11 +92,14 @@ const smoke = new Smoke(scene), skid = new Skid(scene);
 
 // ---------- carros e corredores ----------
 await say('Carregando os carros…');
-const saved = (() => { try { return JSON.parse(localStorage.getItem('garage_v1')) || {}; } catch { return {}; } })();
+const saved = migrateSaved((() => { try { return JSON.parse(localStorage.getItem('garage_v1')) || {}; } catch { return {}; } })());
 const playerCfg = CAR_LIST.find((c) => c.id === saved.car) || CAR_LIST[0];
-const cfgs = MODE === 'tt' ? [playerCfg] : [playerCfg, ...CAR_LIST.filter((c) => c !== playerCfg)];
-const NAMES = ['Você', 'Rafa', 'Duda', 'Léo', 'Bia', 'Caio'], SKILL = [0, 0.95, 0.97, 0.92, 0.94, 0.9];
-const STYLE = [null, { aggr: 0.9, err: 1.3 }, { aggr: 0.15, err: 0.5 }, { aggr: 0.5, err: 1 }, { aggr: 0.8, err: 0.9 }, { aggr: 0.4, err: 1.8 }];
+// a cada partida: o carro do jogador + 6 rivais sorteados entre todos os outros carros
+const _pool = CAR_LIST.filter((c) => c !== playerCfg);
+for (let i = _pool.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [_pool[i], _pool[j]] = [_pool[j], _pool[i]]; }
+const cfgs = MODE === 'tt' ? [playerCfg] : [playerCfg, ..._pool.slice(0, 6)];
+const NAMES = ['Você', 'Rafa', 'Duda', 'Léo', 'Bia', 'Caio', 'Téo', 'Lia'], SKILL = [0, 0.95, 0.97, 0.92, 0.94, 0.9, 0.93, 0.91];
+const STYLE = [null, { aggr: 0.9, err: 1.3 }, { aggr: 0.15, err: 0.5 }, { aggr: 0.5, err: 1 }, { aggr: 0.8, err: 0.9 }, { aggr: 0.4, err: 1.8 }, { aggr: 0.6, err: 1.1 }, { aggr: 0.3, err: 0.8 }];
 const R = rng(Date.now() & 0xffff), finishKeys = Object.keys(FINISHES);
 const usedColors = new Set();
 // LOD dos carros: de longe, sem sombra e sem as peças pequenas
@@ -114,7 +120,7 @@ for (let i = 0; i < cfgs.length; i++) {
   let hex;
   if (i === 0) { hex = (saved.colors || {})[cfg.id] || cfg.defaultColor; car.setFinish((saved.finishes || {})[cfg.id] || 'gloss'); }
   else { let c; do { c = COLORS[(R() * COLORS.length) | 0].hex; } while (usedColors.has(c)); hex = c; car.setFinish(finishKeys[(R() * finishKeys.length) | 0]); }
-  usedColors.add(hex); car.setColor(hex);
+  usedColors.add(hex); car.setColor(hex); car.paint.setVivid(0.38, 0.45);   // cor viva na pista: o sol, o tone mapping e o reflexo do céu não lavam a pintura
   if (i > 0) { for (const b of car.beams) { b.parent && b.parent.remove(b); b.target.parent && b.target.parent.remove(b.target); } car.beams = []; }   // só o carro do jogador tem luz de farol de verdade (menos luzes = shaders mais leves)
   scene.add(car.object);
   const d = car.dims, dims = { length: d.length, width: d.width, wheelbase: d.wheelbase || 2.7, track: d.track || 1.6, wheelRadius: d.wheelRadius || 0.34 };
@@ -127,12 +133,13 @@ const race = new Race(physics, racers, { laps: LAPS, playerSlot: 3 });
 const player = race.player, pv = player.veh;
 const hud = new Hud(track, LAPS), input = new Input(), audio = new CarAudio();
 audio.setProfile(playerCfg.id);
+initMusic('menu'); mountMiniPlayer($('pl1')); mountMiniPlayer($('pl2')); bindMusicKeys({ mute: false, toast: (m) => hud.toast(m) });
 const sparks = new Burst(scene, { N: 260, additive: true, gravity: 6 }), debris = new Burst(scene, { N: 420, additive: false, gravity: 9.8 });
 const aiAudio = new AiAudio(audio, racers, player);
 const cinema = new Cinema(renderer.domElement, $('hudbox'));
 let reflect = null; try { reflect = new Reflect(renderer, scene, player.car); } catch (e) { console.warn('reflect', e); }
 const _tf = new THREE.Vector3(), _sunC = new THREE.Color(), _rp = new THREE.Vector3(), _s = new Float32Array(18), _rs = new Float32Array(18);
-let prevHead = 0, yawRate = 0, cinEsc = false, wasAct = false, savedMute = false;
+let prevHead = 0, yawRate = 0, cinEsc = false, wasAct = false, savedMute = false, hideList = null, hideGhost = null;
 // poeira acumulada na lataria: um brilho marrom (sheen) que cresce ao andar fora da pista e a chuva lava
 for (const e of player.car.paint.entries) { const m = e.mat; if (m.sheenColor) { m.sheenColor.set(0x9c8764); m.sheenRoughness = 0.85; m.sheen = 0.001; m.needsUpdate = true; } }
 player.vis.dust = 0;
@@ -142,10 +149,12 @@ applyArcade();
 
 // ---------- clima ----------
 const presetKeys = Object.keys(PRESETS);
+const TH = W.theme; sw.themeExp = TH.expose || 1;   // mundo do mapa (themes.js): céu/horário, chuva e neve próprios; só o Vale Verde segue o ciclo de horário
 if (PRESETS[Q.get('clima')]) sw.setPreset(Q.get('clima'));
-else if (S.cycle !== 'off') { sw.setPreset('manha'); sw.startCycle(S.cycle === 'fast' ? 180 : 480); }
-else sw.setPreset('manha');
-sw.cycPaused = true; if (Q.get('chuva') === '1') sw.setRain(true);
+else if (TH.cycle && S.cycle !== 'off') { sw.setPreset('manha'); sw.startCycle(S.cycle === 'fast' ? 180 : 480); }
+else sw.setPreset(TH.sky || 'manha');
+sw.cycPaused = true; if (Q.get('chuva') === '1' || (TH.weather && TH.weather.rain)) sw.setRain(true);
+if (TH.weather && TH.weather.snow) sw.setSnow(TH.weather.snow);
 let night = false;
 
 // ---------- câmeras ----------
@@ -158,15 +167,15 @@ function updateCamera(dt) {
   const v = pv, car = player.car, base = car.object.position, sn = Math.sin(v.psi), cs = Math.cos(v.psi), speed = Math.hypot(v.u, v.v);
   const velAng = speed > 6 ? Math.atan2(v.u * sn + v.v * cs, v.u * cs - v.v * sn) : v.psi;
   let fov = 62 + clamp(speed, 0, 80) * 0.22 + (v.nitOn ? 7 : 0);
-  if (camMode === 0) {
+  if (camMode === 0 || camMode === 2) {      // 3ª pessoa (atrás) e 2ª pessoa (a mesma câmera, bem mais perto)
     camHead = lerpAng(camHead, lerpAng(v.psi, velAng, 0.45), 1 - Math.exp(-dt * 5));
-    const dist = 4.6 + speed * 0.002, h = 1.5 + speed * 0.002;
+    const near = camMode === 2, dist = (near ? 2.7 : 4.6) + speed * 0.002, h = (near ? 1.4 : 1.5) + speed * 0.002;
     tmpV.set(base.x - Math.sin(camHead) * dist, base.y + h, base.z - Math.cos(camHead) * dist);
     camPos.lerp(tmpV, 1 - Math.exp(-dt * 22));
-    camLook.set(base.x + Math.sin(camHead) * 7, base.y + 0.85, base.z + Math.cos(camHead) * 7);
-  } else if (camMode === 1 || camMode === 2) {
+    camLook.set(base.x + Math.sin(camHead) * (near ? 6 : 7), base.y + (near ? 0.9 : 0.85), base.z + Math.cos(camHead) * (near ? 6 : 7));
+  } else if (camMode === 1) {      // 1ª pessoa (frente do carro)
     const d = car.dims;
-    tmpV.set(0, camMode === 1 ? d.height * 0.74 : 0.42, camMode === 1 ? d.length * 0.08 : d.length / 2 + 0.12); car.object.localToWorld(tmpV);
+    tmpV.set(0, 0.42, d.length / 2 + 0.12); car.object.localToWorld(tmpV);
     camPos.copy(tmpV); camHead = lerpAng(camHead, lerpAng(v.psi, velAng, 0.25), 1 - Math.exp(-dt * 8));
     camLook.set(camPos.x + Math.sin(camHead) * 30, camPos.y - 0.2, camPos.z + Math.cos(camHead) * 30); fov += 8;
   } else {
@@ -182,7 +191,7 @@ function updateCamera(dt) {
   { const ts = (v.w[0].surf && v.w[0].surf.type) || 0; if (ts > 0 && speed > 4 && camMode !== 3) { const tt = performance.now() * 0.001, a = Math.min(1, speed / 40) * (ts === 1 ? 0.012 : 0.007); camera.position.y += (Math.sin(tt * 53) * 0.5 + Math.sin(tt * 37 + 1.3) * 0.5) * a; camera.position.x += Math.sin(tt * 41 + 0.7) * a * 0.6; } }
   if (shake > 0.01) { camera.position.x += (Math.random() - 0.5) * shake * 0.4; camera.position.y += (Math.random() - 0.5) * shake * 0.3; shake *= Math.exp(-dt * 6); }
   const gy = terrain.heightAt(camera.position.x, camera.position.z) + 0.6;
-  if (camera.position.y < gy && camMode !== 2) camera.position.y = gy;
+  if (camera.position.y < gy && camMode !== 1) camera.position.y = gy;
   camera.lookAt(camLook); camera.fov += (fov - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix();
 }
 
@@ -190,8 +199,8 @@ function updateCamera(dt) {
 function syncCars(dt) {
   for (const rc of racers) {
     const v = rc.veh, car = rc.car, w = v.w, o = car.object, vis = rc.vis;
-    const h = w.map((x) => physics.heightAt(x.px, x.pz));
-    const yF = (h[0] + h[1]) / 2, yR = (h[2] + h[3]) / 2, yL = (h[0] + h[2]) / 2, yRt = (h[1] + h[3]) / 2;
+    const h0 = physics.heightAt(w[0].px, w[0].pz), h1 = physics.heightAt(w[1].px, w[1].pz), h2 = physics.heightAt(w[2].px, w[2].pz), h3 = physics.heightAt(w[3].px, w[3].pz);
+    const yF = (h0 + h1) / 2, yR = (h2 + h3) / 2, yL = (h0 + h2) / 2, yRt = (h1 + h3) / 2;
     const y = (yF + yR) / 2, pitchT = Math.atan2(yF - yR, v.L), rollT = Math.atan2(yL - yRt, v.T);
     const k = vis.init ? 1 - Math.exp(-dt * 7) : 1; vis.init = true;
     vis.y += (y - vis.y) * k; vis.pitch += (pitchT - vis.pitch) * k; vis.roll += (rollT - vis.roll) * k;
@@ -273,7 +282,7 @@ function keys() {
   if (optionsOpen()) return;
   if (input.tap('KeyB')) { S.mirror = !S.mirror; toast(S.mirror ? t('tMirrorOn') : t('tMirrorOff')); }
   if (input.tap('KeyN') && started) restartRace();
-  if (input.tap('KeyC')) { camMode = (camMode + 1) % 4; toast(t('tCam') + ': ' + t('cams')[camMode]); }
+  if (input.tap('KeyC')) { camMode = (camMode + 1) % 3; toast(t('tCam') + ': ' + t('cams')[camMode]); }
   if (input.tap('KeyT')) { pv.assist.auto = !pv.assist.auto; toast(pv.assist.auto ? t('tGearAuto') : t('tGearManual')); }
   if (input.tap('KeyZ')) { pv.assist.abs = !pv.assist.abs; toast(t('tAbs', pv.assist.abs)); }
   if (input.tap('KeyX')) { pv.assist.tc = !pv.assist.tc; toast(t('tTc', pv.assist.tc)); }
@@ -283,10 +292,10 @@ function keys() {
   for (let i = 1; i <= 4; i++) if (input.tap('Digit' + i)) setPreset(presetKeys[i - 1]);
   if (input.tap('BracketLeft') || input.tap('Minus') || input.tap('NumpadSubtract')) { sw.setBrightness(sw.expScale - 0.08); toast(t('tBright') + ' ' + Math.round(sw.expScale * 100) + '%'); }
   if (input.tap('BracketRight') || input.tap('Equal') || input.tap('NumpadAdd')) { sw.setBrightness(sw.expScale + 0.08); toast(t('tBright') + ' ' + Math.round(sw.expScale * 100) + '%'); }
-  if (input.tap('KeyM')) { audio.setMuted(!audio.muted); toast(audio.muted ? t('tSoundOff') : t('tSoundOn')); }
+  if (input.tap('KeyM')) { setOpt('muteAll', !S.muteAll); toast(S.muteAll ? t('tSoundOff') : t('tSoundOn')); }
   if ((input.tap('KeyP') || (input.tap('Escape') && !cinEsc)) && started && !finishedShown) { paused = !paused; $('pauseov').classList.toggle('on', paused); if (audio.ctx) paused ? audio.ctx.suspend() : audio.ctx.resume(); }
 }
-function begin() { if (started) return; started = true; $('startov').classList.remove('on'); audio.start(); }
+function begin() { if (started) return; started = true; $('startov').classList.remove('on'); audio.start(); try { if (!aiAudio.on) aiAudio._init(); } catch (e) {} }
 $('go').onclick = begin; $('optS').onclick = openOptions; $('optP').onclick = openOptions; $('restartB').onclick = () => restartRace(); $('resume').onclick = () => { paused = false; $('pauseov').classList.remove('on'); if (audio.ctx) audio.ctx.resume(); };
 addEventListener('keydown', (e) => { if (!started && !optionsOpen() && !['F5', 'F12'].includes(e.code)) begin(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && started && !paused && !finishedShown) { paused = true; $('pauseov').classList.add('on'); } });
@@ -357,52 +366,81 @@ await say('Preparando as árvores…');
 $('loading').classList.add('done'); $('startov').classList.add('on');
 let last = performance.now(), acc = 0, time = 0, fps = 60, frameN = 0;
 // ---------- desempenho adaptativo: ajusta resolução e detalhes para manter ~60 fps ----------
-const perf = { ema: 16.7, low: 0, hi: 0, cool: 3, level: 2, shadowEvery: 2, fixed: false };
+// vs = período do quadro quando a tela está "em dia" (menor média vista: 16,7 ms em 60 Hz, 6,9 ms em 144 Hz); upWait/lastUp = espera crescente para tentar subir a qualidade
+const perf = { ema: 16.7, low: 0, hi: 0, cool: 3, level: 2, shadowEvery: 2, fixed: false, vs: 16.7, clock: 0, upWait: 6, lastUp: -1e9 };
+const PKEY = 'perf_v1';
+const savePerf = () => { try { localStorage.setItem(PKEY, JSON.stringify({ level: perf.level, ratio: +ratio.toFixed(2) })); } catch {} };
+let postOK = true;   // o nível de qualidade permite o pass de movimento/chuva/raios (o pass só roda mesmo quando há efeito: ver 'extras')
 function applyRatio() { renderer.setPixelRatio(ratio); composer.setPixelRatio(ratio); composer.setSize(innerWidth, innerHeight); }
 function applyLevel() {
   const L = perf.level;
-  const TK = S.treeRange; veg.range = [200, 300, 400][L] * TK; veg.farRange = Math.max(veg.range + 60, [420, 520, 600][L] * TK); veg.grassRange = [0, 55, 90][L]; veg.grassOn = L > 0; veg.rockRange = [420, 520, 600][L]; veg.pebbleRange = [60, 90, 120][L];
-  perf.shadowEvery = [3, 2, 2][L]; bloom.enabled = L > 0; post.pass.enabled = L > 0; veg._last.t = -1;
+  const TK = S.treeRange; veg.range = [160, 240, 330][L] * TK; veg.farRange = Math.max(veg.range + 60, [420, 520, 600][L] * TK); veg.grassRange = [0, 55, 90][L]; veg.grassOn = L > 0; veg.rockRange = [420, 520, 600][L]; veg.pebbleRange = [60, 90, 120][L];
+  perf.shadowEvery = [3, 2, 2][L]; bloom.enabled = L > 0; postOK = L > 0; veg._last.t = -1;
   if (smaa) smaa.enabled = L >= 2 && fxOn(); fin.pass.enabled = L > 0 && fxOn();
 }
 function perfUpdate(dt) {
-  perf.ema += (dt * 1000 - perf.ema) * 0.05; perf.cool -= dt;
+  perf.ema += (dt * 1000 - perf.ema) * 0.05; perf.cool -= dt; perf.clock += dt;
+  if (!document.hidden && started && !paused && perf.ema < perf.vs) perf.vs = Math.max(4, perf.ema);
   if (perf.fixed || !started || paused || perf.cool > 0 || document.hidden) return;
-  if (race.state !== 'race' || race.t < 8) { perf.low = 0; return; }   // não reduz a resolução na largada (era isso que deixava a imagem borrada na arrancada)
+  if ((race.state === 'grid' || race.t < 2.5) && perf.ema < 50) { perf.low = 0; return; }   // na contagem só age se estiver muito lento (< 20 fps)   // só dá 2,5 s de folga na largada (antes eram 8 s de lentidão)   // não reduz a resolução na largada (era isso que deixava a imagem borrada na arrancada)
   if (perf.ema > 24) { perf.hi = 0; perf.low += dt;
-    if (perf.low > 2) { perf.low = 0; perf.cool = 2.5; if (ratio > 0.81) { ratio = Math.max(0.8, ratio - 0.1); applyRatio(); } else if (perf.level > 0) { perf.level--; applyLevel(); } } }
-  else if (perf.ema < 14.8) { perf.low = 0; perf.hi += dt;
-    if (perf.hi > 6) { perf.hi = 0; perf.cool = 3; if (ratio < MAXR - 1e-3) { ratio = Math.min(MAXR, ratio + 0.1); applyRatio(); } else if (perf.level < 2) { perf.level++; applyLevel(); } } }
+    const bad = perf.ema > 45;   // muito lento: reage em ~0,7 s e desce vários degraus de uma vez
+    if (bad && perf.low > 0.7) { perf.low = 0; perf.cool = 1; ratio = Math.max(0.8, ratio - 0.3); applyRatio(); if (ratio <= 0.801 && perf.level > 0) { perf.level--; applyLevel(); } savePerf(); return; }
+    if (perf.low > 2) { perf.low = 0; perf.cool = 2.5; if (perf.clock - perf.lastUp < 25) perf.upWait = Math.min(120, perf.upWait * 2);   // a subida recente não se sustentou: espera mais da próxima vez
+      if (ratio > 0.81) { ratio = Math.max(0.8, ratio - 0.1); applyRatio(); } else if (perf.level > 0) { perf.level--; applyLevel(); } savePerf(); } }
+  else if (perf.ema < Math.max(14.8, perf.vs * 1.15) && (ratio < MAXR - 1e-3 || perf.level < 2)) { perf.low = 0; perf.hi += dt;   // "em dia" com a tela (60 Hz inclusive) e ainda há o que recuperar
+    if (perf.hi > perf.upWait) { perf.hi = 0; perf.cool = 3; if (perf.clock - perf.lastUp > 60) perf.upWait = 6; perf.lastUp = perf.clock; if (ratio < MAXR - 1e-3) { ratio = Math.min(MAXR, ratio + 0.1); applyRatio(); } else if (perf.level < 2) { perf.level++; applyLevel(); } savePerf(); } }
   else { perf.low = perf.hi = 0; }
 }
 const statsEl = document.createElement('div'); statsEl.style.cssText = 'position:fixed;left:24px;top:150px;font:12px/1.5 ui-monospace,Consolas,monospace;color:#9fb3a8;display:none;pointer-events:none;z-index:5;text-shadow:0 1px 4px #000'; document.body.appendChild(statsEl);
 addEventListener('keydown', (e) => { if (e.code === 'KeyF' && e.target.tagName !== 'INPUT') statsEl.style.display = statsEl.style.display === 'none' ? 'block' : 'none'; });
+let perfLoaded = false;
 function applyQuality() {
   const q = S.quality; perf.fixed = q !== 'auto';
+  if (!perf.fixed && !perfLoaded) { perfLoaded = true;   // qualidade automática: parte do último nível estável deste computador (em vez de sempre do máximo)
+    try { const r = JSON.parse(localStorage.getItem(PKEY)); if (r && r.level >= 0 && r.level <= 2 && r.ratio >= 0.8) { perf.level = r.level; ratio = Math.min(MAXR, r.ratio); applyRatio(); } } catch {} }
   if (perf.fixed) { perf.level = { low: 0, med: 1, high: 2 }[q]; ratio = q === 'low' ? Math.min(MAXR, 0.75) : q === 'med' ? Math.min(MAXR, 1) : MAXR; applyRatio(); }
   applyLevel();
 }
 addEventListener('optionschange', (e) => {
   if (e.detail === 'arcade') { applyArcade(); toast(S.arcade ? 'Direção arcade (fácil)' : 'Direção realista'); }
   const k = e.detail;
-  if (k === 'volume') audio.setMuted(audio.muted);
+  if (k === 'volume' || k === 'sfx' || k === 'muteAll') audio.setMuted(audio.muted);
   else if (k === 'quality') applyQuality();
   else if (k === 'treeRange' || k === 'fx') applyLevel();
   else if (k === 'abs') pv.assist.abs = S.abs; else if (k === 'tc') pv.assist.tc = S.tc; else if (k === 'stab') pv.assist.stab = S.stab; else if (k === 'autoGear') pv.assist.auto = S.autoGear;
-  else if (k === 'cycle') { if (S.cycle === 'off') sw.setPreset(sw.preset === 'por' ? 'por' : 'manha'); else sw.startCycle(S.cycle === 'fast' ? 180 : 480, sw.cyc ? Math.min(1, sw.cyc.t / sw.cyc.T) : 0); }
+  else if (k === 'cycle' && TH.cycle) { if (S.cycle === 'off') sw.setPreset(sw.preset === 'por' ? 'por' : 'manha'); else sw.startCycle(S.cycle === 'fast' ? 180 : 480, sw.cyc ? Math.min(1, sw.cyc.t / sw.cyc.T) : 0); }
 });
 applyQuality();
+// ---------- medidor de desempenho (F3 ou ?perf=1): mostra onde o quadro gasta tempo, para achar o que trava na largada ----------
+const PERF = { on: Q.get('perf') === '1', sec: {}, cur: null, last: 0, ema: {}, worst: 0, worstInfo: '', slow: 0, n: 0, el: null, t0: 0 };
+const PKEYS = ['physics', 'pose', 'sync', 'fx', 'cam', 'ghost', 'world', 'hud', 'audio', 'extras', 'render', 'tail'];
+function __p(k) { if (!PERF.on) return; const n = performance.now(); if (PERF.cur) PERF.cur[k] = (PERF.cur[k] || 0) + (n - PERF.last); PERF.last = n; }
+function perfBegin(now) { if (!PERF.on) return; PERF.gap = PERF.prev ? now - PERF.prev : 16; PERF.prev = now; PERF.cur = {}; PERF.last = performance.now(); renderer.info.autoReset = false; renderer.info.reset(); }
+function perfEnd(gap) {
+  if (!PERF.on || !PERF.cur) return; const c = PERF.cur, sum = PKEYS.reduce((a, k) => a + (c[k] || 0), 0), inRace = race.state === 'race' && race.t < 12;
+  for (const k of PKEYS) PERF.ema[k] = (PERF.ema[k] ?? 0) * 0.92 + (c[k] || 0) * 0.08; PERF.ema.sum = (PERF.ema.sum ?? 0) * 0.92 + sum * 0.08; PERF.ema.gap = (PERF.ema.gap ?? 16) * 0.92 + gap * 0.08;
+  if (inRace) { PERF.n++; if (gap > 33) PERF.slow++; if (gap > PERF.worst) { PERF.worst = gap; PERF.worstInfo = `t=${race.t.toFixed(1)}s js ${sum.toFixed(1)}ms (` + PKEYS.filter((k) => (c[k] || 0) > 2).map((k) => k + ' ' + c[k].toFixed(1)).join(', ') + ')'; } }
+  if (!PERF.el) { PERF.el = document.createElement('pre'); PERF.el.style.cssText = 'position:fixed;left:8px;top:8px;z-index:99999;margin:0;padding:8px 10px;background:rgba(0,0,0,.72);color:#9fe;font:11px/1.35 ui-monospace,Consolas,monospace;border-radius:6px;pointer-events:none;white-space:pre'; document.body.appendChild(PERF.el); }
+  if (now0 - PERF.t0 > 400) { PERF.t0 = now0; const i = renderer.info, e = PERF.ema;
+    PERF.el.textContent = `FPS ${(1000 / e.gap).toFixed(0)}  quadro ${e.gap.toFixed(1)} ms | JS ${e.sum.toFixed(1)} ms | espera GPU/vsync ${Math.max(0, e.gap - e.sum).toFixed(1)} ms\n`
+      + PKEYS.map((k) => k + ' ' + (e[k] || 0).toFixed(1)).join('  ') + `\nchamadas ${i.render.calls}  triângulos ${(i.render.triangles / 1000).toFixed(0)}k  geometrias ${i.memory.geometries}  texturas ${i.memory.textures}  shaders ${i.programs ? i.programs.length : '?'}\nnível ${perf.level}  estado ${race.state}  ` + (PERF.n ? `1ª parte da corrida (12 s): ${PERF.slow}/${PERF.n} quadros lentos, pior ${PERF.worst.toFixed(0)} ms ${PERF.worstInfo}` : '(aguardando a largada)'); }
+}
+let now0 = 0;
+addEventListener('keydown', (e) => { if (e.key === 'F3') { e.preventDefault(); PERF.on = !PERF.on; if (!PERF.on) { if (PERF.el) { PERF.el.remove(); PERF.el = null; } renderer.info.autoReset = true; } else { PERF.worst = 0; PERF.slow = 0; PERF.n = 0; PERF.prev = 0; } } });
 function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  now0 = now; perfBegin(now);
+  setContext(started && !paused && !finishedShown ? 'race' : 'menu');
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;   // quadro lento não vira uma avalanche de passos de física
   const inp = input.read(dt); inp.steer = clamp(inp.steer * S.steerSens, -1, 1); handleCinema(); if (!cinema.active) keys(); sw.cycPaused = !(started && !paused && !cinema.active);
   if (started && !paused && !cinema.active) {
     time += dt; acc += dt; let n = 0;
-    while (acc >= STEP && n < 40) {
+    while (acc >= STEP && n < 14) {
       snapPrev(racers);
       race.step(STEP, applyCornerAssist(inp, pv, { track, idx: player.idx, wet: physics.wet || 0 }, S.cornerAssist && race.state === 'race' && !player.finished && !player.auto));
       acc -= STEP; n++;
     }
-    if (n >= 40) acc = 0;
+    if (n >= 14) acc = 0;
     for (const e of race.events) {
       if (e.type === 'cross' && e.racer === player) { lastLapSamples = recorder.s; recorder = new GhostRecorder(); }
       else if (e.type === 'lap' && e.racer === player) {
@@ -420,15 +458,18 @@ function frame(now) {
     sparkFx(player, player.hit); if (player.hit > 5) shake = Math.min(1.2, player.hit * 0.06); player.hit = 0;
     for (const r of racers) if (r !== player) { sparkFx(r, r.hit); r.hit = 0; }
   }
+__p('physics');
   blendPose(racers, started && !paused ? clamp(acc / STEP, 0, 1) : 1);   // desenha o carro entre dois passos da física (sem tremor)
+__p('pose');
   physics.wet = sw.wet; W.applyWet(sw.wet);
-  night = sw.preset === 'por' || sw.preset === 'nublado' || sw.rain > 0.3;
+  night = sw.preset === 'por' || sw.preset === 'nublado' || sw.preset === 'noite' || sw.preset === 'neve' || sw.rain > 0.3;
   frameN++;
-  if (frameN % 8 === 0) for (const rc of racers) if (rc !== player) { const d = rc.car.object.position.distanceTo(camera.position); applyLod(rc, d < 55 ? 0 : 1); }
+  if (frameN % 8 === 0) for (const rc of racers) if (rc !== player) { const d = rc.car.object.position.distanceTo(camera.position); applyLod(rc, d < 32 ? 0 : 1); }
   renderer.shadowMap.needsUpdate = frameN % perf.shadowEvery === 0;
   perfUpdate(dt);
   const fdt = cinema.photo ? 0 : dt;
   if (cinema.replay) replayPose(dt); else { syncCars(fdt); if (started && !paused && !cinema.active) cinema.record(dt, racers); }
+__p('sync');
   skid.flush(); W.side.setNight(night);
   const pScale = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360));
   smoke.update(fdt); smoke.m.uniforms.uScale.value = pScale; sparks.update(fdt, pScale); debris.update(fdt, pScale);
@@ -437,10 +478,12 @@ function frame(now) {
     for (let i = 0; i < n; i++) { const f = -2 + Math.random() * 22, l = (Math.random() - 0.5) * 11, x = o.x + sn * f + cs * l, z = o.z + cs * f - sn * l, gy = physics.heightAt(x, z) + 0.02;
       debris.emit(x, gy, z, (Math.random() - 0.5) * 0.8, 1.2 + Math.random() * 1.6, (Math.random() - 0.5) * 0.8, 0.28, 0.045, 0.82, 0.88, 0.96, gy); }
   }
+__p('fx');
   if (cinema.replay && cinema.buf) cinema.replayCam(cinema.at(0, _s), camera, dt);
   else if (cinema.photo) cinema.photoCam(player.car.object.position, camera);
   else updateCamera(dt);
   { const dh = Math.atan2(Math.sin(camHead - prevHead), Math.cos(camHead - prevHead)); prevHead = camHead; yawRate += ((dt > 0 ? dh / dt : 0) - yawRate) * Math.min(1, dt * 8); }
+__p('cam');
   // fantasma
   let gDelta = null;
   if (ghostCar) {
@@ -453,14 +496,18 @@ function frame(now) {
   turnInfo = null;
   if (false && damage > 0.55 && started && !paused && Math.random() < (damage - 0.5) * dt * 20) {   // fumaça de dano removida
     const o = player.car.object.position, sn = Math.sin(pv.psi), cs = Math.cos(pv.psi), L = player.car.dims.length * 0.32; smoke.emit(o.x + sn * L, o.y + 0.6, o.z + cs * L, sn * pv.u * 0.3, cs * pv.u * 0.3, 0, 0.55); }
-  sw.update(dt, time); sw.follow(player.car.object.position);
+__p('ghost');
+  sw.update(dt, time); sw.follow(player.car.object.position); W.props.update(renderer.getPixelRatio());
   { const sn = Math.sin(pv.psi), cs = Math.cos(pv.psi); leadV.set((pv.u * sn + pv.v * cs) * 0.6, 0, (pv.u * cs - pv.v * sn) * 0.6); }
   veg.update(camera, time, sw.wind, leadV);
+__p('world');
   // HUD e som
   const order = race.racers.slice().sort((a, b) => a.pos - b.pos);
   hud.countdown(race.t); hud.update({ veh: pv, pos: player.pos, total: racers.length, lapNo: player.lapNo, finished: player.finished, state: race.state, lapTime: race.t - player.lapStart, best: player.best, order, player, extra: { rec: ghostP ? ghostP.rec.time : null, delta: gDelta, turn: turnInfo, damage } });
+__p('hud');
   let sq = 0; for (const w of pv.w) sq = Math.max(sq, Math.abs(w.kappa) / 0.22, Math.abs(w.alpha) / 0.2);
-  audio.update({ rpm: pv.rpm, thr: pv.thr, speed: Math.abs(pv.u), squeal: clamp(sq - 0.85, 0, 1.5) * (Math.abs(pv.u) > 5 ? 1 : 0), offroad: pv.w.some((w) => w.surf && w.surf.type > 0), redline: pv.spec.redline });
+  try { audio.update({ rpm: pv.rpm, thr: pv.thr, speed: Math.abs(pv.u), squeal: clamp(sq - 0.85, 0, 1.5) * (Math.abs(pv.u) > 5 ? 1 : 0), offroad: pv.w.some((w) => w.surf && w.surf.type > 0), redline: pv.spec.redline }); } catch (e) { if (!audioWarned) { audioWarned = true; console.warn('audio', e); } }
+__p('audio');
   { const u = post.u, sp = Math.abs(pv.u); u.uTime.value = time; u.uAspect.value = innerWidth / innerHeight; u.uSpeed.value = camMode === 3 ? 0 : clamp((sp - 48) / 70, 0, 1) * 0.5 + (pv.nitOn ? 0.08 : 0); u.uRain.value = camMode === 3 ? 0 : sw.rain; }
   { // efeitos extras: movimento pela curva, raios de sol, cor de cinema, sombras de nuvens, reflexo na lataria, som dos bots
     const u = post.u, on = fxOn(), sp = Math.abs(pv.u), moving = !cinema.active && camMode !== 3;
@@ -472,17 +519,34 @@ function frame(now) {
     fin.u.uTime.value = time; fin.u.uAspect.value = innerWidth / innerHeight; fin.u.uSpeed.value = clamp(sp / 60, 0, 1);
     if (reflect) {
       _rp.copy(player.car.object.position); _rp.y += 0.9;
-      reflect.setHidden([veg.root, smoke.mesh, sparks.mesh, debris.mesh, sw.rainMesh, ...racers.map((r) => r.car.object), ...racers.map((r) => r.fx.blob), ...(ghostCar ? [ghostCar.object] : [])]);
-      reflect.setEnabled(on && perf.level === 2 && !cinema.active && camMode !== 3, _rp); reflect.update(_rp);
+      if (!hideList || hideGhost !== ghostCar) { hideGhost = ghostCar; hideList = [veg.root, smoke.mesh, sparks.mesh, debris.mesh, sw.rainMesh, ...racers.map((r) => r.car.object), ...racers.map((r) => r.fx.blob), ...(ghostCar ? [ghostCar.object] : [])]; }   // lista montada uma vez (antes: 3 arrays novos por quadro)
+      reflect.setHidden(hideList);
+      reflect.every = perf.level === 2 ? 3 : perf.level === 1 ? 6 : 12;   // reflexo da lataria fica ligado em todos os níveis (só atualiza mais devagar quando o PC está apertado)
+      reflect.setEnabled(on && !cinema.active && camMode !== 3, _rp); reflect.update(_rp);
     }
-    if (started && !paused && !cinema.active) { if (on) aiAudio.update(camera, dt); else aiAudio.silence(); }
+    if (started && !paused && !cinema.active) { try { if (on) aiAudio.update(camera, dt); else aiAudio.silence(); } catch (e) { console.warn('aiAudio', e); aiAudio.dead = true; } }
     if (audio.popped) { audio.popped = 0; if (on && !cinema.active) player.fx.flame(1); }
+    // pass de desfoque radial / gotas / raios: sem velocidade alta, sem chuva e sem sol à vista ele não altera a imagem — pula o pass inteiro (economiza uma tela cheia em HDR)
+    post.pass.enabled = postOK && (u.uSpeed.value > 0.0005 || u.uRain.value > 0.01 || u.uRays.value > 0.01 || Math.abs(u.uYaw.value) > 0.0005);
   }
+__p('extras');
   composer.render(dt); cinema.grab();
+__p('render');
   { const po = player.car.object.position, mOn = false; /* retrovisor desligado (quadro do topo removido) */ mirror.render(mOn, { x: po.x, y: po.y + player.car.dims.height * 0.95 + 0.15, z: po.z }, pv.psi, 2); }
   if (statsEl.style.display !== 'none') { const i = renderer.info; statsEl.innerHTML = `${(1000 / perf.ema).toFixed(0)} fps · resolução ${(ratio * 100).toFixed(0)}% · nível ${perf.level}<br>${i.render.calls} draw calls · ${(i.render.triangles / 1000).toFixed(0)}k triângulos`; }
   restorePose(racers);
-  input.endFrame();
+  input.endFrame(); __p('tail'); perfEnd(PERF.gap);
   requestAnimationFrame(frame);
-}
+}// ---------- aquecimento 2: marcas de pneu, fumaça, faíscas e reflexo da lataria compilados antes da largada ----------
+// (sem isto, o navegador compila esses shaders na hora em que o carro arranca ou na 1ª captura do reflexo, e o jogo trava um instante)
+try {
+  const p = player.car.object.position;
+  skid.add(-1, p.x, p.y, p.z, 1); skid.add(-1, p.x + 0.6, p.y, p.z, 1); skid.flush();
+  smoke.emit(p.x, p.y + 1, p.z, 0, 0, 0, 1); sparks.emit(p.x, p.y + 1, p.z, 0, 0, 0, 0.05, 0.1, 1, 0.8, 0.4); debris.emit(p.x, p.y + 1, p.z, 0, 0, 0, 0.05, 0.1, 0.4, 0.35, 0.3);
+  if (reflect && fxOn()) { _rp.copy(p); _rp.y += 0.9; reflect.setHidden([veg.root, smoke.mesh, sparks.mesh, debris.mesh, sw.rainMesh, ...racers.map((r) => r.car.object), ...racers.map((r) => r.fx.blob)]); reflect.setEnabled(true, _rp); }
+  composer.render(0.016); composer.render(0.016);
+  skid.n = 0; skid.last.clear(); skid.dirty = true; skid.flush();
+  smoke.life.fill(0); sparks.life.fill(0); debris.life.fill(0);
+  smoke.update(0.016); sparks.update(0.016, 600); debris.update(0.016, 600);
+} catch (e) { console.warn('aquecimento 2', e); }
 requestAnimationFrame(frame);

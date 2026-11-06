@@ -32,12 +32,26 @@ function tire(kappa, alpha, Fz, mu, ld = 1) {
   return [f * kn, -f * an];
 }
 
+/** igual a tire(), mas escreve [Fx, Fy] em `out` (sem criar array: roda 8x por carro a cada passo de 1/240 s) */
+function tireTo(out, kappa, alpha, Fz, mu, ld) {
+  const kn = kappa / KPEAK, an = alpha / (APEAK * ld), s = Math.hypot(kn, an);
+  if (s < 1e-6) { out[0] = 0; out[1] = 0; return; }
+  const f = CURVE(s) * mu * Fz / s;
+  out[0] = f * kn; out[1] = -f * an;
+}
+const fin = (v) => v === undefined || Number.isFinite(v);
+const ramp = (cur, tgt, up, dn, dt) => cur + clamp(tgt - cur, -dn * dt, up * dt);
+const DRV_AWD = [0, 1, 2, 3], DRV_FWD = [0, 1], DRV_RWD = [2, 3], BF = [0.7, 0.7, 0.3, 0.3];
+function lsd(T, w, a, b) {   // diferencial autoblocante leve entre as rodas do mesmo eixo
+  if (T[a] !== 0) { const dw = w[a].omega - w[b].omega, tl = clamp(dw * 18, -Math.abs(T[a]) * 0.45, Math.abs(T[a]) * 0.45); T[a] -= tl; T[b] += tl; }
+}
+
 function torqueShape(x) { return (0.62 + 0.38 * smooth(0.08, 0.45, x)) * (1 - 0.26 * smooth(0.62, 1.0, x)); }
 
 export class Vehicle {
   /** dims: { length, width, wheelbase, track, wheelRadius } em metros (vindo do carModel) */
   constructor(id, dims) {
-    const S = this.spec = SPECS[id] || SPECS.sport_white; this.id = id;
+    const S = this.spec = SPECS[id] || SPECS.carro6; this.id = id;
     const L = this.L = dims.wheelbase || 2.6, T = this.T = dims.track || 1.55;
     this.R = dims.wheelRadius || 0.33; this.m = S.mass; this.h = S.cg;
     this.a = L * (1 - S.front);        // eixo dianteiro até o centro de gravidade
@@ -55,6 +69,7 @@ export class Vehicle {
     ].map((w) => ({ ...w, omega: 0, kappa: 0, alpha: 0, fz: 0, fx: 0, fy: 0, px: 0, pz: 0, surf: null, load: 0 }));
     this.brakeT = S.mass * G * S.brakeG * this.R;       // torque de freio total (N·m nas rodas)
     this.assist = { abs: true, tc: true, stab: 0.6, auto: true };
+    this._fz = new Float64Array(4); this._T = new Float64Array(4); this._Tb = new Float64Array(4); this._tf = new Float64Array(2);   // reaproveitados a cada passo da física
     this.reset(0, 0, 0, 0);
   }
 
@@ -81,16 +96,30 @@ export class Vehicle {
    * in: { steer -1..1, throttle 0..1, brake 0..1, handbrake 0..1, nitro bool, up bool, down bool }
    * env: { surface(x,z) -> {mu, rr}, heightAt(x,z), wet 0..1 }
    */
+  /** passo da física com proteção: se algum valor do estado virar NaN/Infinity, volta ao último estado bom (sem travar o jogo) */
   step(dt, inp, env) {
+    let ok = fin(this.x) && fin(this.z) && fin(this.psi) && fin(this.u) && fin(this.v) && fin(this.r) && fin(this.ax) && fin(this.ay) && fin(this.rpm) && fin(this.steerAng) && fin(this.thr) && fin(this.brk) && fin(this.hb) && fin(this.nit) && fin(this.draft);
+    if (ok) for (let i = 0; i < 4; i++) if (!Number.isFinite(this.w[i].omega)) { ok = false; break; }
+    if (!ok) {
+      const g = this._hasGood ? this._good : null;
+      if (g) { Object.assign(this, g); this.u = 0; this.v = 0; this.r = 0; this.ax = 0; this.ay = 0; this.draft = 0; for (const w of this.w) { w.omega = 0; w.kappa = w.alpha = w.fx = w.fy = 0; } }
+      else this.reset(0, 0, 0, 0);
+      if (!this._warned) { this._warned = true; console.warn('Vehicle: estado inválido corrigido', this.id); }
+    }
+    const g2 = this._good || (this._good = {});   // último estado bom (objeto reaproveitado)
+    g2.x = this.x; g2.z = this.z; g2.psi = this.psi; g2.u = this.u; g2.v = this.v; g2.r = this.r; g2.ax = this.ax; g2.ay = this.ay; g2.rpm = this.rpm; g2.steerAng = this.steerAng;
+    g2.thr = this.thr; g2.brk = this.brk; g2.hb = this.hb; g2.nit = this.nit; g2.draft = this.draft || 0; this._hasGood = true;
+    this._stepRaw(dt, inp, env);
+  }
+  _stepRaw(dt, inp, env) {
     if (this.arcade) { stepArcade(this, dt, inp, env); return; }   // direção fácil (arcade.js)
     const S = this.spec, as = this.assist;
     const u = this.u, v = this.v, r = this.r, sp = Math.hypot(u, v);
     this.speed = u;
     // ---- entradas suavizadas ----
-    const ramp = (cur, tgt, up, dn) => cur + clamp(tgt - cur, -dn * dt, up * dt);
-    this.thr = ramp(this.thr, inp.throttle, 7, 12);
-    this.brk = ramp(this.brk, inp.brake, 9, 14);
-    this.hb = ramp(this.hb, inp.handbrake || 0, 12, 12);
+    this.thr = ramp(this.thr, inp.throttle, 7, 12, dt);
+    this.brk = ramp(this.brk, inp.brake, 9, 14, dt);
+    this.hb = ramp(this.hb, inp.handbrake || 0, 12, 12, dt);
     const lock = this.maxSteer(u);
     let tgt = inp.steer * lock;
     // ajuda de estabilidade: contra-esterça um pouco quando a traseira escapa
@@ -109,7 +138,7 @@ export class Vehicle {
     const dFl = clamp(this.m * this.ax * this.h / this.L, -Wf * 0.7, Wr * 0.7);
     const rsF = 0.55, dyF = clamp(this.m * this.ay * this.h * rsF / this.T, -Wf * 0.45, Wf * 0.45), dyR = clamp(this.m * this.ay * this.h * (1 - rsF) / this.T, -Wr * 0.45, Wr * 0.45);
     const fzF = (Wf - dFl + down * S.aeroFront) / 2, fzR = (Wr + dFl + down * (1 - S.aeroFront)) / 2;
-    const fz = [fzF - dyF, fzF + dyF, fzR - dyR, fzR + dyR];
+    const fz = this._fz; fz[0] = fzF - dyF; fz[1] = fzF + dyF; fz[2] = fzR - dyR; fz[3] = fzR + dyR;
 
     // ---- superfície e posição de cada roda ----
     const sn = Math.sin(this.psi), cs = Math.cos(this.psi);
@@ -121,9 +150,9 @@ export class Vehicle {
     }
 
     // ---- trem de força ----
-    const driven = S.drive === 'AWD' ? [0, 1, 2, 3] : S.drive === 'FWD' ? [0, 1] : [2, 3];
+    const driven = S.drive === 'AWD' ? DRV_AWD : S.drive === 'FWD' ? DRV_FWD : DRV_RWD;
     const G_ = this.ratio(this.gear), reverse = this.gear < 0;
-    let avgW = 0; for (const i of driven) avgW += Math.abs(this.w[i].omega); avgW /= driven.length;
+    let avgW = 0; for (let k = 0; k < driven.length; k++) avgW += Math.abs(this.w[driven[k]].omega); avgW /= driven.length;
     const rpmWheel = avgW * Math.abs(G_) * 60 / TAU;
     const slow = Math.abs(G_) > 0 && rpmWheel < S.idle * 1.8 && Math.abs(u) < 7;
     const launch = S.idle + 0.55 * (S.redline - S.idle) * this.thr * (this.gear === 1 || reverse ? 1 : 0.5);
@@ -137,19 +166,15 @@ export class Vehicle {
     const Twheel = Te * Math.abs(G_) * 0.9 * (reverse ? -1 : 1);       // torque total nas rodas motrizes
     const Ieff = this.Iw + (slow ? 0 : this.Ie * G_ * G_ / driven.length);
     // distribuição
-    const T = [0, 0, 0, 0];
-    if (S.drive === 'AWD') { const fr = S.awdFront; [0, 1].forEach((i) => (T[i] = Twheel * fr / 2)); [2, 3].forEach((i) => (T[i] = Twheel * (1 - fr) / 2)); }
-    else driven.forEach((i) => (T[i] = Twheel / 2));
-    // diferencial autoblocante leve entre as rodas do mesmo eixo
-    for (const [a, b] of [[0, 1], [2, 3]]) if (T[a] !== 0) {
-      const dw = this.w[a].omega - this.w[b].omega, tl = clamp(dw * 18, -Math.abs(T[a]) * 0.45, Math.abs(T[a]) * 0.45);
-      T[a] -= tl; T[b] += tl;
-    }
+    const T = this._T; T[0] = T[1] = T[2] = T[3] = 0;
+    if (S.drive === 'AWD') { const fr = S.awdFront; T[0] = T[1] = Twheel * fr / 2; T[2] = T[3] = Twheel * (1 - fr) / 2; }
+    else for (let k = 0; k < driven.length; k++) T[driven[k]] = Twheel / 2;
+    lsd(T, this.w, 0, 1); lsd(T, this.w, 2, 3);
 
     // ---- frenagem ----
     const braking = reverse && as.auto ? inp.throttle : inp.brake;
-    const bk = this.brk, bf = [0.7, 0.7, 0.3, 0.3];
-    const Tb = [0, 0, 0, 0];
+    const bk = this.brk, bf = BF;
+    const Tb = this._Tb;
     for (let i = 0; i < 4; i++) Tb[i] = this.brakeT * bf[i] / 2 * (reverse && as.auto ? clamp(inp.throttle, 0, 1) : bk);
     if (this.hb > 0.01) { Tb[2] += this.brakeT * 0.35 * this.hb; Tb[3] += this.brakeT * 0.35 * this.hb; }
 
@@ -166,8 +191,8 @@ export class Vehicle {
       mu = Math.max(0.15, mu);
       const kappa = (w.omega * R - vxw) / den, alpha = Math.atan2(vyw, denA) * Math.sign(vxw || 1);
       const ld = Math.pow(w.fz / (this.m * G / 4), 0.4) * (front ? 1 : 1 / (S.rearGrip || 1.06));
-      let [fxw, fyw] = tire(kappa, alpha, w.fz, mu, ld);
-      const [fx2] = tire(kappa + 0.01, alpha, w.fz, mu, ld);
+      const tf = this._tf; tireTo(tf, kappa, alpha, w.fz, mu, ld); const fxw = tf[0], fyw = tf[1];
+      tireTo(tf, kappa + 0.01, alpha, w.fz, mu, ld); const fx2 = tf[0];
       const kw = Math.max(0, (fx2 - fxw) / 0.01 * R / den);               // dFx/dω
       // ABS / controle de tração
       let tb = Tb[i], td = T[i];

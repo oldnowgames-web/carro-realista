@@ -10,7 +10,7 @@ import { Terrain } from './terrain.js';
 import { Vegetation } from './vegetation.js';
 import { SkyWeather, PRESETS } from './skyWeather.js';
 import * as TX from './textures.js';
-import { CAR_LIST } from './carData.js';
+import { CAR_LIST, migrateSaved } from './carData.js';
 import { loadGLB, buildCar } from './carModel.js';
 import { lerp, clamp } from './noise.js';
 
@@ -56,7 +56,7 @@ const terrain = new Terrain(track);
 const sw = new SkyWeather(scene, renderer, camera);
 await say('Carregando árvores e pedras…');
 const veg = new Vegetation(scene, terrain, track);
-await veg.load('assets/nature/', renderer);
+await veg.load('nature/', renderer);
 await say('Montando o cenário…');
 
 const tex = { grass: TX.grassTexture(), dirt: TX.dirtTexture(), gravel: TX.gravelTexture(), noise: TX.noiseTexture(), rock: veg.mat.rock.map };
@@ -70,7 +70,7 @@ scene.add(track.startLine(new THREE.MeshStandardMaterial({ map: TX.checkerTextur
 
 // ---------- carro (o mesmo escolhido na garagem) ----------
 await say('Carregando o carro…');
-const saved = (() => { try { return JSON.parse(localStorage.getItem('garage_v1')) || {}; } catch { return {}; } })();
+const saved = migrateSaved((() => { try { return JSON.parse(localStorage.getItem('garage_v1')) || {}; } catch { return {}; } })());
 const cfg = CAR_LIST.find((c) => c.id === saved.car) || CAR_LIST[0];
 const car = buildCar(await loadGLB(cfg.file, renderer), cfg);
 car.setColor((saved.colors || {})[cfg.id] || cfg.defaultColor); car.setFinish((saved.finishes || {})[cfg.id] || 'gloss');

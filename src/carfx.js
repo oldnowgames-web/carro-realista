@@ -38,7 +38,7 @@ export function makeCarFx(scene, car, d) {
     const one = (a) => { if (a.length < 9) return null; let sx = 0, sy = 0, mz = 1e9, x0 = 1e9, x1 = -1e9, n = a.length / 3; for (let i = 0; i < a.length; i += 3) { sx += a[i]; sy += a[i + 1]; mz = Math.min(mz, a[i + 2]); x0 = Math.min(x0, a[i]); x1 = Math.max(x1, a[i]); } return { x: sx / n, y: sy / n, z: mz - 0.05, w: x1 - x0 }; };
     const l = one(pts.L), r = one(pts.R); return l && r && l.z < -0.5 ? [l, r] : null;
   })();
-  // sem material de lanterna no modelo (Aventador, Camaro): posição relativa medida no próprio carro (lanterna ≈ 24% da largura, ≈ 79% da altura, na traseira)
+  // sem material de lanterna no modelo (Aventador, Muscle): posição relativa medida no próprio carro (lanterna ≈ 24% da largura, ≈ 79% da altura, na traseira)
   const rearZ = (() => { const root = car.object; root.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(car.chassis).applyMatrix4(new THREE.Matrix4().copy(root.matrixWorld).invert()); return bb.min.z; })();
   const fb = [{ x: -d.width * 0.24, y: d.height * 0.79, z: rearZ - 0.04 }, { x: d.width * 0.24, y: d.height * 0.79, z: rearZ - 0.04 }];
   const tsz = lamp ? Math.min(0.75, Math.max(0.45, Math.max(lamp[0].w, lamp[1].w) * 1.1 + 0.2)) : 0.6;
@@ -49,11 +49,13 @@ export function makeCarFx(scene, car, d) {
   return {
     blob, patches,
     flame(k = 1) { flT = 0.09 * k; },
-    tick(dt) { if (flT > 0) { flT -= dt; const a = Math.max(0, flT / 0.09); for (const s of fl) { s.material.opacity = Math.min(1, a * 1.2); s.scale.setScalar(0.35 + 0.5 * (1 - a)); } } else if (fl[0].material.opacity > 0) for (const s of fl) s.material.opacity = 0; },
+    // sprites com opacidade 0 ficam invisíveis (não geram draw call). No 1º quadro ainda estão visíveis: o aquecimento compila o shader deles
+    tick(dt) { if (flT > 0) { flT -= dt; const a = Math.max(0, flT / 0.09); for (const s of fl) { s.visible = true; s.material.opacity = Math.min(1, a * 1.2); s.scale.setScalar(0.35 + 0.5 * (1 - a)); } } else if (fl[0].visible) for (const s of fl) { s.material.opacity = 0; s.visible = false; } },
     update(night, braking, dist) {
-      const near = dist < 140;
-      for (const s of head) s.material.opacity = night && near ? 0.9 : 0;
-      for (const s of tail) s.material.opacity = near ? (braking ? 0.85 : night ? 0.45 : 0) : 0;
+      const near = dist < 140, hv = night && near;
+      for (const s of head) { s.material.opacity = hv ? 0.9 : 0; s.visible = hv; }
+      const to = near ? (braking ? 0.85 : night ? 0.45 : 0) : 0;
+      for (const s of tail) { s.material.opacity = to; s.visible = to > 0; }
     },
   };
 }

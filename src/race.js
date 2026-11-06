@@ -11,7 +11,9 @@ export class WorldPhysics {
   constructor(track, terrain, plan) {
     this.track = track; this.terrain = terrain; this.wet = 0;
     this.CELL = 16; this.hash = new Map(); this._tmp = [];
-    const add = (o) => { const k = Math.floor(o.x / this.CELL) + ',' + Math.floor(o.z / this.CELL); (this.hash.get(k) || this.hash.set(k, []).get(k)).push(o); };
+    // chave numérica da célula (antes era string "x,z": ~50 mil strings por segundo só nas colisões). Vale para células de -2048 a 2047 (±32 km)
+    const key = (cx, cz) => (cx + 2048) * 4096 + (cz + 2048); this._key = key;
+    const add = (o) => { const k = key(Math.floor(o.x / this.CELL), Math.floor(o.z / this.CELL)); (this.hash.get(k) || this.hash.set(k, []).get(k)).push(o); };
     this.addObstacle = (x, z, r) => add({ x, z, r });
     if (plan) {
       for (const t of plan.trees) add({ x: t.x, z: t.z, r: (t.pine ? 0.36 : 0.44) * t.sc });
@@ -20,18 +22,20 @@ export class WorldPhysics {
   }
   obstacles(x, z) {
     const out = this._tmp; out.length = 0; const cx = Math.floor(x / this.CELL), cz = Math.floor(z / this.CELL);
-    for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) { const l = this.hash.get(a + ',' + b); if (l) for (const o of l) out.push(o); }
+    for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) { const l = this.hash.get(this._key(a, b)); if (l) for (let q = 0; q < l.length; q++) out.push(l[q]); }
     return out;
   }
   /** aderência e resistência do piso sob uma roda (w.hint guarda o índice da pista para busca rápida) */
   surface(x, z, w) {
-    const loc = this.track.locate(x, z, w && w.hint); if (w) w.hint = loc.i;
+    const loc = this.track.locateTo(this._loc || (this._loc = { i: 0, d: 0, lat: 0, along: 0 }), x, z, w && w.hint); if (w) w.hint = loc.i;
     const a = Math.abs(loc.lat), wet = this.wet;
     const asph = 1 - 0.30 * wet, gravel = 0.62 * (1 - 0.1 * wet), grass = 0.56 * (1 - 0.22 * wet);
     const g1 = sm(HALF + 0.9, HALF + 1.7, a), g2 = sm(HALF + 5.5, HALF + 7.0, a);
     const mu = asph * (1 - g1) + (gravel * (1 - g2) + grass * g2) * g1;
     const rr = 0.0 * (1 - g1) + (0.05 * (1 - g2) + 0.11 * g2) * g1;
-    return { mu, rr, lat: loc.lat, type: a <= HALF + 0.9 ? 0 : a <= HALF + 6.5 ? 1 : 2 };
+    const type = a <= HALF + 0.9 ? 0 : a <= HALF + 6.5 ? 1 : 2;
+    if (w) { const o = w._sf || (w._sf = { mu: 0, rr: 0, lat: 0, type: 0 }); o.mu = mu; o.rr = rr; o.lat = loc.lat; o.type = type; return o; }   // roda: reaproveita o objeto (a física chama isto 4x por passo)
+    return { mu, rr, lat: loc.lat, type };
   }
   heightAt(x, z) {
     const t = this.terrain, d = t.distAt(x, z);
@@ -49,6 +53,10 @@ export class Racer {
   }
 }
 
+const GRID_INP = { steer: 0, throttle: 0, brake: 1, handbrake: 1, nitro: false };
+// true se `a` vem antes de `b` na classificação (mesmo critério do sort original)
+const before = (a, b) => (a.finished && b.finished ? a.finishT - b.finishT < 0 : a.finished ? true : b.finished ? false : b.prog - a.prog < 0);
+
 export class Race {
   constructor(world, racers, { laps = 3, playerSlot = 3 } = {}) {
     this.world = world; this.racers = racers; this.laps = laps; this.state = 'grid'; this.t = -5; this.events = [];
@@ -56,6 +64,7 @@ export class Race {
     const order = racers.slice().sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
     const player = order.pop(); order.splice(Math.min(playerSlot, order.length), 0, player);
     this.order = order; this.grid(order);
+    this._obs = (x, z) => this.world.obstacles(x, z); this._ord = []; this._loc = { i: 0, d: 0, lat: 0, along: 0 };
     this.player = racers.find((r) => r.isPlayer) || null;
   }
   grid(order) {
@@ -88,7 +97,7 @@ export class Race {
     const tr = this.world.track, N = tr.N;
     for (const r of this.racers) {
       let inp;
-      if (this.state === 'grid') inp = { steer: 0, throttle: 0, brake: 1, handbrake: 1, nitro: false };
+      if (this.state === 'grid') inp = GRID_INP;
       else if (r.isPlayer && !r.auto) inp = playerInput;
       else { const d = r.auto || r.driver; inp = d.control(r, this, dt); if (inp.stuck > 3) { this.resetRacer(r, 8); d.stuck = 0; } if (d.react && this.t < d.react && !r.finished) inp = Object.assign({}, inp, { throttle: 0 }); }   // tempo de reação na largada
       { // vácuo: quem vem logo atrás de outro carro, em linha reta e rápido, sofre menos resistência do ar
@@ -102,7 +111,7 @@ export class Race {
       }
       r.veh.step(dt, inp, this.env);
       // progresso e voltas
-      const loc = tr.locate(r.veh.x, r.veh.z, r.hint), prev = r.idx; r.hint = loc.i; r.idx = loc.i; r.lat = loc.lat;
+      const loc = tr.locateTo(this._loc, r.veh.x, r.veh.z, r.hint), prev = r.idx; r.hint = loc.i; r.idx = loc.i; r.lat = loc.lat;
       if (prev > N * 0.75 && loc.i < N * 0.25) {
         r.lapNo++; this.events.push({ type: 'cross', racer: r, lapNo: r.lapNo });
         if (r.lapNo >= 2) { const lt = this.t - r.lapStart; r.laps.push(lt); if (r.best == null || lt < r.best) r.best = lt; this.events.push({ type: 'lap', racer: r, time: lt, lap: r.lapNo - 1 }); }
@@ -112,7 +121,7 @@ export class Race {
       r.prog = r.lapNo * N + (r.lapNo === 0 && loc.i > N / 2 ? loc.i - N : loc.i);
       if (Math.abs(loc.lat) > HALF + 22 && this.state === 'race') this.resetRacer(r, 6);
       // obstáculos fixos
-      const hs = hitStatic(r.veh, r.len, r.wid, (x, z) => this.world.obstacles(x, z)); if (hs > r.hit) r.hit = hs;
+      const hs = hitStatic(r.veh, r.len, r.wid, this._obs); if (hs > r.hit) r.hit = hs;
     }
     for (let i = 0; i < this.racers.length; i++) for (let j = i + 1; j < this.racers.length; j++) {
       const a = this.racers[i], b = this.racers[j];
@@ -120,7 +129,13 @@ export class Race {
       const h = hitCars(a.veh, b.veh, a.len, a.wid); if (h > 0.5) { a.hit = Math.max(a.hit, h); b.hit = Math.max(b.hit, h); }
     }
     // posições
-    const order = this.racers.slice().sort((a, b) => (a.finished && b.finished ? a.finishT - b.finishT : a.finished ? -1 : b.finished ? 1 : b.prog - a.prog));
-    order.forEach((r, i) => (r.pos = i + 1));
+    // (ordenação por inserção numa lista reaproveitada: mesmo resultado do sort(), sem criar array 240x por segundo)
+    const order = this._ord, rs = this.racers, n = rs.length; order.length = n;
+    for (let i = 0; i < n; i++) {
+      const x = rs[i]; let j = i - 1;
+      while (j >= 0 && before(x, order[j])) { order[j + 1] = order[j]; j--; }
+      order[j + 1] = x;
+    }
+    for (let i = 0; i < n; i++) order[i].pos = i + 1;
   }
 }

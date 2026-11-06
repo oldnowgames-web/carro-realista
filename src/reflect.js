@@ -4,7 +4,7 @@ import * as THREE from 'three';
 
 export class Reflect {
   constructor(renderer, scene, car, size = 96) {
-    this.r = renderer; this.scene = scene; this.car = car; this.on = false; this.n = 0; this.hide = []; this.dead = false;
+    this.r = renderer; this.scene = scene; this.car = car; this.on = false; this.n = 0; this.hide = []; this.dead = false; this.every = 3;
     this.rt = new THREE.WebGLCubeRenderTarget(size, { type: THREE.HalfFloatType, generateMipmaps: false, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter });
     this.cc = new THREE.CubeCamera(0.4, 2500, this.rt);
     this.mats = [];
@@ -31,8 +31,8 @@ export class Reflect {
   /** chamar a cada quadro (só tem efeito quando ligado) */
   update(pos) {
     if (!this.on || this.dead) return;
-    if (++this.n % 3 !== 0) return;
-    const face = (this.n / 3) % 6;
+    if (++this.n % this.every !== 0) return;
+    const face = (this.n / this.every) % 6;
     try { this._capture(pos, [face]); if (face === 5) this.rt.texture.needsPMREMUpdate = true; }
     catch (e) { console.warn('reflect', e); this.dead = true; this.on = false; for (const m of this.mats) m.envMap = null; }
   }
