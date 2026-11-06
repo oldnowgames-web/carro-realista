@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Modo de jogo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,700;0,800;1,700;1,800;1,900&family=Barlow:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/modo.css">
+  <link rel="stylesheet" href="css/options.css">
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <div class="bg"></div>
+  <main>
+    <header>
+      <div><p class="kick" data-i18n="race">Corrida</p><h1 data-i18n="modeScreen">Modo de jogo</h1></div>
+      <div class="car"><small data-i18n="yourCar">Seu carro</small><b id="carName">—</b><a href="garagem.html" data-i18n="changeCar">Trocar carro</a></div>
+    </header>
+
+    <section>
+      <h2 data-i18n="mode">Modo</h2>
+      <div class="cards" id="modes">
+        <button class="card" data-v="race"><b data-i18n="modeRace"></b><span data-i18n="mdRace"></span></button>
+        <button class="card" data-v="tt"><b data-i18n="modeTT"></b><span data-i18n="mdTT"></span></button>
+        <button class="card" data-v="champ"><b data-i18n="modeChamp"></b><span data-i18n="mdChamp"></span></button>
+      </div>
+    </section>
+
+    <section id="trackSec">
+      <h2 data-i18n="track">Pista</h2>
+      <div class="cards maps" id="tracks"></div>
+      <label class="chk"><input type="checkbox" id="rev"> <span data-i18n="reverse">Sentido inverso</span></label>
+    </section>
+    <p class="note" id="champNote" data-i18n="champNote" hidden></p>
+
+    <div class="row2">
+      <section><h2 data-i18n="laps">Voltas</h2><div class="seg" id="laps"></div></section>
+      <section><h2 data-i18n="difficulty">Dificuldade</h2><div class="seg" id="dif"></div></section>
+    </div>
+    <p class="rec" id="recInfo"></p>
+  </main>
+  <footer>
+    <a class="btn" href="garagem.html" data-i18n="back">Voltar</a>
+    <button id="opt" class="optbtn" data-i18n="options">Opções</button>
+    <button id="go" class="pri" data-i18n="startRace">Largar</button>
+  </footer>
+  <div id="player"></div>
+
+  <script type="module">
+    import { t, applyI18n, S } from './src/settings.js';
+    import { openOptions } from './src/optionsUI.js';
+    import { initUiAudio } from './src/uiaudio.js';
+    import { initMusic } from './src/music.js';
+    import { mountMiniPlayer, bindMusicKeys } from './src/musicUI.js';
+    import { TRACKS, Track, trackControl, trackOpts } from './src/trackBuilder.js';
+    import { themeOf } from './src/themes.js';
+    import { CAR_LIST } from './src/carData.js';
+    import { newChamp, clearChamp } from './src/championship.js';
+    import { recKey, getRecordTime } from './src/ghost.js';
+    import { fmt } from './src/hud.js';
+    const $ = (id) => document.getElementById(id), KEY = 'race_opts_v1';
+    applyI18n(); initUiAudio(); initMusic('menu'); mountMiniPlayer($('player')); bindMusicKeys();
+    let o = {}; try { o = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
+    const st = { mode: o.mode || 'race', track: o.track || TRACKS[0].id, rev: !!o.rev, laps: String(o.laps || 3), dif: String(o.dif || 1) };
+    if (!TRACKS.some((x) => x.id === st.track)) st.track = TRACKS[0].id;
+    let carId = 'aventador'; try { carId = (JSON.parse(localStorage.getItem('garage_v1')) || {}).car || carId; } catch {}
+    const car = CAR_LIST.find((c) => c.id === carId) || CAR_LIST[0]; carId = car.id; $('carName').textContent = car.name;
+    // ---------- quadros dos mapas: foto real do mundo (assets/maps/ID.jpg) em todos + mundo 3D ao vivo só no selecionado ----------
+    const en = () => S.lang === 'en';
+    const outline = (id) => {   // silhueta do traçado (vem dos pontos da própria pista) e comprimento
+      const tr = new Track(trackControl(id), trackOpts(id)), pts = tr.S.filter((_, i) => i % 6 === 0);
+      let a = 1e9, b = -1e9, c = 1e9, d = -1e9; for (const p of pts) { a = Math.min(a, p.x); b = Math.max(b, p.x); c = Math.min(c, p.z); d = Math.max(d, p.z); }
+      const k = 74 / Math.max(b - a, d - c), ox = 45 - ((b - a) * k) / 2, oy = 45 - ((d - c) * k) / 2;
+      return { len: tr.length, path: 'M' + pts.map((p) => ((p.x - a) * k + ox).toFixed(1) + ',' + ((p.z - c) * k + oy).toFixed(1)).join('L') + 'Z' };
+    };
+    const OUT = {}; for (const x of TRACKS) OUT[x.id] = outline(x.id);
+    function buildMaps() {
+      $('tracks').innerHTML = TRACKS.map((x, i) => {
+        const th = themeOf(x.theme), o = OUT[x.id], tags = (en() ? th.tagsEn : th.tags) || [], g = th.grad || ['#4a6a5a', '#9fb4c6'];
+        const km = (o.len / 1000).toLocaleString(en() ? 'en-US' : 'pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        return `<button class="card map" data-v="${x.id}" style="--g1:${g[0]};--g2:${g[1]}">
+          <div class="shot"><img src="maps/${x.id}.jpg" alt="" loading="lazy" onerror="this.remove()"></div>
+          <i>${String(i + 1).padStart(2, '0')}</i><span class="liveb">● ${en() ? 'LIVE' : 'AO VIVO'}</span>
+          <span class="tags">${tags.map((g2) => `<span class="tag">${g2}</span>`).join('')}</span>
+          <svg class="mini" viewBox="0 0 90 90"><path d="${o.path}"/></svg>
+          <div class="info"><b>${x.name}</b><span>${(en() ? th.descEn : th.desc) || ''}</span><small>${km} km</small></div></button>`;
+      }).join('');
+      liveFor = null;
+    }
+    // mundo ao vivo no quadro selecionado (preview.html em iframe): só em tela grande e computador razoável, e só depois de um instante parado no mapa
+    let liveFrame = null, liveTimer = 0, liveFor = null;
+    const canLive = () => innerWidth >= 700 && (navigator.hardwareConcurrency || 4) >= 4 && !(navigator.connection && navigator.connection.saveData);
+    function showLive() {
+      clearTimeout(liveTimer);
+      if (liveFrame) { liveFrame.remove(); liveFrame = null; }
+      document.querySelectorAll('.map.live').forEach((c) => c.classList.remove('live'));
+      if (!liveFor || !canLive()) return;
+      const card = document.querySelector(`#tracks .map[data-v="${liveFor}"]`); if (!card) return;
+      liveTimer = setTimeout(() => {
+        const f = document.createElement('iframe'); f.className = 'liveframe'; f.tabIndex = -1; f.setAttribute('aria-hidden', 'true'); f.src = `preview.html?pista=${liveFor}&ui=0&lite=1`;
+        card.querySelector('.shot').appendChild(f); liveFrame = f;
+      }, 1100);
+    }
+    addEventListener('message', (e) => { if (e.data && e.data.type === 'preview-ready' && liveFrame && e.source === liveFrame.contentWindow) { liveFrame.classList.add('on'); liveFrame.closest('.map').classList.add('live'); } });
+    addEventListener('optionschange', (e) => { if (e.detail === 'lang') { buildMaps(); render(); } });
+    buildMaps();
+    const seg = (id, items) => { $(id).innerHTML = items.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join(''); };
+    seg('laps', ['1', '2', '3', '5', '10'].map((v) => [v, v]));
+    const difs = () => seg('dif', [['0.9', t('easy')], ['1', t('normal')], ['1.08', t('hard')]]); difs();
+    function render() {
+      const camp = st.mode === 'champ';
+      document.querySelectorAll('#modes .card').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === st.mode)));
+      document.querySelectorAll('#tracks .card[data-v]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === st.track)));
+      document.querySelectorAll('#laps button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === st.laps)));
+      document.querySelectorAll('#dif button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === st.dif)));
+      $('rev').checked = st.rev; $('trackSec').hidden = camp; $('champNote').hidden = !camp; $('recInfo').hidden = camp;
+      const rt = getRecordTime(recKey(carId, st.track, st.rev)); $('recInfo').textContent = t('record') + ': ' + (rt ? fmt(rt) : t('noRecord'));
+      try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {}
+      const want = camp ? null : st.track; if (want !== liveFor) { liveFor = want; showLive(); }
+    }
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-v]'); if (!b) return; const p = b.parentElement.id;
+      if (p === 'modes') st.mode = b.dataset.v; else if (p === 'tracks') st.track = b.dataset.v; else if (p === 'laps') st.laps = b.dataset.v; else if (p === 'dif') st.dif = b.dataset.v; render();
+    });
+    $('rev').onchange = () => { st.rev = $('rev').checked; render(); };
+    addEventListener('optionschange', () => { difs(); render(); });
+    $('opt').onclick = () => openOptions();
+    function go() {
+      render();
+      if (st.mode === 'champ') { clearChamp(); newChamp({ laps: +st.laps, dif: +st.dif }); location.href = `game.html?modo=champ&laps=${st.laps}&dif=${st.dif}`; }
+      else location.href = `game.html?modo=${st.mode}&pista=${st.track}&rev=${st.rev ? 1 : 0}&laps=${st.laps}&dif=${st.dif}`;
+    }
+    $('go').onclick = go;
+    addEventListener('keydown', (e) => { if (e.code === 'Enter' && !['BUTTON', 'A', 'SELECT'].includes(e.target.tagName)) go(); });
+    render();
+  </script>
+</body>
+</html>

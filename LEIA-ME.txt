@@ -2,6 +2,27 @@ CORRIDA - projeto completo
 1) Abra a pasta "racer" no VS Code e use o Live Server em index.html.
 2) Se algo der erro: F12 > Console, e veja a primeira linha vermelha.
 
+=== MAPAS (novo) ===
+9 mapas, cada um com um "mundo" próprio: 01 Vale Verde, 02 Planalto, 03 Serra, 04 Costa Dourada (mar, palmeiras, pôr do sol),
+05 Deserto Vermelho (dunas, mesas, cactos), 06 Alpes Nevados (neve caindo, pinheiros congelados), 07 Circuito Urbano (noite, prédios com
+janelas acesas, postes de luz, estrelas e lua), 08 Floresta Tropical (mata fechada, chuva, terra vermelha), 09 Estrada do Interior
+(cercas, postes de energia, fardos de feno, celeiros).
+- Tela de modos (modo.html): cada mapa tem um quadro com FOTO REAL do mundo (assets/maps/ID.jpg), nome, descrição, tags, comprimento e
+  a silhueta do traçado. O mapa SELECIONADO mostra o mundo 3D AO VIVO (preview.html em iframe, câmera voando pela pista). O 3D ao vivo só
+  liga em tela grande (>= 700 px) e PC com 4+ núcleos; no celular fica só a foto.
+- Onde mexer: src/tracksData.js (traçado das pistas novas) · src/themes.js (relevo, cores do chão, vegetação, clima, objetos de cada mapa) ·
+  src/props.js (palmeira, cacto, prédio, poste, cerca, casa, celeiro, mar - tudo feito em código) · src/skyWeather.js (presets noite/deserto/neve, estrelas, neve).
+- Criar um mapa novo: 1) pista em src/tracksData.js com theme: 'meu-tema'; 2) THEMES['meu-tema'] em src/themes.js (veja o guia no topo do arquivo);
+  3) gerar a foto: abra preview.html?pista=ID&cap=1 (baixa ID.jpg) e coloque em assets/maps/. Sem a foto, o quadro mostra um degradê do tema.
+- O Vale Verde segue o "ciclo de horário" das opções; os outros mapas têm horário e clima fixos do tema (a tecla do clima ainda funciona).
+- Campeonato: agora passa pelas 9 pistas.
+
+=== DESEMPENHO NA LARGADA ===
+- A física dos 8 carros e a IA dos bots foram otimizadas (menos objetos criados 1000x por segundo): o resultado da simulação é idêntico ao anterior
+  (conferido bit a bit), com menos CPU e menos pausas do coletor de lixo. Gráficos, sombras, reflexos e detalhes não foram alterados.
+- MEDIDOR: aperte F3 (ou abra o jogo com ?perf=1) para ver FPS, tempo de JavaScript por parte do quadro, chamadas de desenho, triângulos e o
+  pior quadro dos 12 primeiros segundos da corrida. Se ainda travar na largada, me mande a linha "1ª parte da corrida" e o texto do medidor.
+
 Arquivos ORIGINAIS (do zip garagem-passo3-v3): carData, carModel, carSpecs, collide, input, noise, paint,
 showroom, terrain, textures (montanhas, texturas, garagem, cores e carros como antes), sceneMain.js e css/scene.css.
 Mantidos do jogo atual: vegetacao (arvores), HUD, opcoes, campeonato, fantasma etc.
@@ -11,7 +32,7 @@ NOVO: (1) src/interp.js - o carro nao treme mais (a imagem e interpolada entre o
       (2) src/assist.js - "Ajuda nas curvas": soltar o acelerador ja freia sozinho ate a velocidade segura da curva
           (Opcoes > Controles > "Ajuda nas curvas"). Se voce acelerar ou frear, a ajuda nao interfere.
 
-NOVO: DIRECAO FACIL (arcade), como no Old Racers - src/arcade.js (ligada por padrao).
+NOVO: DIRECAO FACIL (arcade) - src/arcade.js (ligada por padrao).
       O volante comanda o giro direto, o carro "gruda" na direcao que aponta, soltar o acelerador ja desacelera e a
       "Ajuda nas curvas" freia sozinha so se voce estiver rapido demais para uma curva fechada.
       Vale para o seu carro e para os bots. Para voltar a fisica realista de pneus: Opcoes > Controles > desmarque "Direcao facil".
@@ -38,3 +59,13 @@ Ligado em Opções > Gráficos > "Realismo extra" (ou desligue com ?fx=0 na URL)
   Vácuo: quem vem logo atrás de outro carro, em reta, sofre menos resistência do ar. Não existe "elástico" artificial.
 - Teclas novas: Y = replay dos últimos ~25 s (←/→ velocidade, Espaço pausa, Esc sai) · H = modo foto (arraste/roda do mouse,
   ↑/↓ lente, Enter salva um PNG, H/Esc sai).
+
+
+=== NOVIDADES (versão atual) ===
+- MÚSICA: coloque music1 ... music5 (.mp3) na pasta sounds/. Player com anterior/tocar/próxima/volume na tela inicial, garagem,
+  pausa e nas Opções. Teclas: , (anterior)  . (próxima)  K (tocar/pausar)  M (silenciar tudo). A música continua de onde parou ao trocar de tela.
+  Sem os arquivos, toca uma música sintetizada de reserva. Nomes das faixas: TRACKS em src/music.js.
+- OPÇÕES novas (abas Som / Gráficos / Controles / Geral): volume geral, música, motor e efeitos, silenciar tudo, aleatório, repetir, música na corrida.
+- TELA INICIAL nova (index.html + css/start.css + src/hero.js): carro 3D desfilando. O nome do jogo está em src/settings.js (appTitle), pt e en.
+- Camaro removido. Novos: Muscle 70 e Cyber Truck (assets/cars/muscle.glb, cyber.glb; config em src/carData.js).
+- "Mudadinha" em todos os carros (src/carMods.js, campo mods em carData.js): largura, aerofólio, lip, saias, listras, aros, vidro, barra de luz.

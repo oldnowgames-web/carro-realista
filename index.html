@@ -4,33 +4,85 @@
   <meta charset="utf-8">
   <title>Corrida</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071012">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,700;0,800;1,700;1,800;1,900&family=Barlow:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="css/start.css">
   <link rel="stylesheet" href="css/options.css">
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
 </head>
 <body>
-  <div class="bg"></div><div class="road"></div>
+  <!-- cenário: céu, sol, montanhas, estrada em perspectiva -->
+  <div class="scene" aria-hidden="true">
+    <div class="sky"></div><div class="stars"></div>
+    <div class="sun"><i></i></div>
+    <svg class="mtn far" viewBox="0 0 1600 300" preserveAspectRatio="none"><path d="M0 300V190l90-60 70 40 120-100 110 90 80-50 140 110 120-120 130 100 90-60 150 110 110-80 120 80 100-70 120 80 60-40V300z"/></svg>
+    <svg class="mtn near" viewBox="0 0 1600 300" preserveAspectRatio="none"><path d="M0 300V220l120-70 90 60 140-110 100 80 110-40 150 100 100-90 140 80 120-70 130 100 100-60 140 90 60-30V300z"/></svg>
+    <div class="road"><div class="edge l"></div><div class="edge r"></div><div class="dash"></div><div class="grid"></div></div>
+    <div class="streaks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="vig"></div>
+  </div>
+
+  <canvas id="hero" aria-hidden="true"></canvas>
+
   <main>
-    <p class="kicker" data-i18n="tagline">Simulador de corrida</p>
-    <h1 data-i18n="appTitle">CORRIDA</h1>
-    <button id="start" class="pri" data-i18n="start">Iniciar</button>
-    <button id="opt" class="optbtn" data-i18n="options">Opções</button>
-    <p class="hint" data-i18n="pressKey">Pressione Enter ou Espaço</p>
+    <header class="brand">
+      <p class="kicker"><span data-i18n="menuSub">Corrida realista no navegador</span></p>
+      <h1 class="logo" aria-label="Corrida"><span data-i18n="appTitle" data-t="CORRIDA">CORRIDA</span></h1>
+      <i class="slash"></i>
+    </header>
+    <nav class="menu">
+      <button id="start" class="mbtn pri"><span data-i18n="menuPlay">Jogar</span><b>›</b></button>
+      <button id="opt" class="mbtn"><span data-i18n="menuOptions">Opções</span><b>›</b></button>
+      <button id="snd" class="mbtn ghost" hidden><span data-i18n="soundOn">Clique para ativar o som</span></button>
+    </nav>
+    <p class="hint"><kbd>Enter</kbd> / <kbd>Espaço</kbd> <span data-i18n="menuPlay2">jogar</span> · <kbd>O</kbd> <span data-i18n="menuOptions">Opções</span> · <kbd>,</kbd> <kbd>.</kbd> ♪</p>
   </main>
+
+  <aside id="carTag" class="cartag"><small>—</small><b>—</b><span></span></aside>
+  <div id="player"></div>
+  <div id="boot"><span>…</span></div>
+
   <script type="module">
-    import { applyI18n } from './src/settings.js';
+    import { S, t, applyI18n } from './src/settings.js';
     import { openOptions, optionsOpen } from './src/optionsUI.js';
     import { initUiAudio } from './src/uiaudio.js';
-    applyI18n(); initUiAudio();
+    import { initMusic, getState } from './src/music.js';
+    import { SPECS } from './src/carSpecs.js';
+    import { mountMiniPlayer, bindMusicKeys } from './src/musicUI.js';
     const $ = (id) => document.getElementById(id);
+    applyI18n(); initUiAudio(); initMusic('menu'); mountMiniPlayer($('player')); bindMusicKeys();
+    let hero = null, leaving = false;
     function go() {
-      document.body.classList.add('leaving');
-      setTimeout(() => { location.href = 'garagem.html'; }, 350);
+      if (leaving) return; leaving = true;
+      document.body.classList.add('leaving'); if (hero) hero.leave();
+      setTimeout(() => { location.href = 'garagem.html'; }, 650);
     }
-    $('start').onclick = go; $('opt').onclick = openOptions;
-    addEventListener('keydown', (e) => { if (optionsOpen() || e.target.tagName === 'SELECT' || (e.target.tagName === 'BUTTON' && e.target.id !== 'start')) return; if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); go(); } });
+    $('start').onclick = go; $('opt').onclick = () => openOptions('sound');
+    addEventListener('keydown', (e) => {
+      if (optionsOpen() || e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT' || e.ctrlKey || e.metaKey) return;
+      if (e.target.tagName === 'BUTTON' && e.code === 'Space') return;
+      if (e.code === 'Enter' && e.target.tagName === 'BUTTON' && e.target.id !== 'start') return;
+      if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); go(); }
+      else if (e.code === 'KeyO') openOptions('sound');
+    });
+    // carro 3D (se o WebGL ou o arquivo falhar, o cenário continua funcionando)
+    (async () => {
+      try {
+        const { startHero } = await import('./src/hero.js');
+        hero = await startHero($('hero'), { onCar: (cfg, car) => {
+          const d = car.dims, tag = $('carTag'); tag.classList.remove('on');
+          setTimeout(() => { tag.querySelector('small').textContent = t('car'); tag.querySelector('b').textContent = cfg.name; const sp = SPECS[cfg.id] || {}; tag.querySelector('span').textContent = `${Math.round((sp.power || 0) * 1.36)} cv · ${sp.drive || ''} · ${Math.round((sp.mass || 0))} kg`; tag.classList.add('on'); }, 350);
+        } });
+        document.body.classList.add('ready');
+      } catch (e) { console.warn('hero', e); document.body.classList.add('ready', 'nohero'); }
+    })();
+    setTimeout(() => document.body.classList.add('ready'), 4000);
+    // se o navegador bloqueou o som automático, mostra o aviso até o primeiro clique/tecla
+    setTimeout(() => { const st = getState(); if (!st.playing && !st.allFailed && S.musicOn && !S.muteAll) { $('snd').hidden = false; const hide = () => { $('snd').hidden = true; }; addEventListener('pointerdown', hide, { once: true }); addEventListener('keydown', hide, { once: true }); } }, 1500);
   </script>
 </body>
 </html>

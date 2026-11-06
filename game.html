@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,700;0,800;1,700;1,800;1,900&family=Barlow:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/scene.css">
   <link rel="stylesheet" href="css/game.css">
@@ -37,10 +37,11 @@
   <div id="startov" class="ovl"><div class="card"><h2 data-i18n="ready2">Pronto para largar</h2>
     <div class="keys"><b>W / S</b><span data-i18n="kAccel"></span><b>A / D</b><span data-i18n="kSteer"></span><b>Space</b><span data-i18n="kHand"></span><b>Shift</b><span data-i18n="kNitro"></span>
     <b>E / Q</b><span data-i18n="kGears"></span><b>T</b><span data-i18n="kGear"></span><b>Z · X · V</b><span data-i18n="kAssists"></span>
-    <b>C</b><span data-i18n="kCam"></span><b>B</b><span data-i18n="kMirror"></span><b>R</b><span data-i18n="kReset"></span><b>N</b><span data-i18n="kRestart"></span><b>1–4 · G</b><span data-i18n="kClock"></span><b>M · P</b><span data-i18n="kMute"></span></div>
+    <b>C</b><span data-i18n="kCam"></span><b>B</b><span data-i18n="kMirror"></span><b>R</b><span data-i18n="kReset"></span><b>N</b><span data-i18n="kRestart"></span><b>1–4 · G</b><span data-i18n="kClock"></span><b>M · P</b><span data-i18n="kMute"></span><b>, · . · K</b><span data-i18n="kMusic"></span></div>
     <p data-i18n="padHelp"></p>
+    <div id="pl1" style="margin-top:12px"></div>
     <div class="row"><button id="go" class="pri" data-i18n="begin">Começar</button><button id="optS" data-i18n="options">Opções</button></div></div></div>
-  <div id="pauseov" class="ovl"><div class="card"><h2 data-i18n="pause">Pausa</h2><div class="row"><button id="resume" class="pri" data-i18n="resume">Continuar</button><button id="restartB" data-i18n="restart">Reiniciar</button><button id="optP" data-i18n="options">Opções</button><a class="btn" href="garagem.html" data-i18n="garage">Garagem</a></div></div></div>
+  <div id="pauseov" class="ovl"><div class="card"><h2 data-i18n="pause">Pausa</h2><div id="pl2"></div><div class="row"><button id="resume" class="pri" data-i18n="resume">Continuar</button><button id="restartB" data-i18n="restart">Reiniciar</button><button id="optP" data-i18n="options">Opções</button><a class="btn" href="garagem.html" data-i18n="garage">Garagem</a></div></div></div>
   <div id="results" class="ovl"></div>
   <div id="loading"><span id="loadText" data-i18n="loading">Carregando…</span></div>
   <script type="module" src="src/gameMain.js"></script>

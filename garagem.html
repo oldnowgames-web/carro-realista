@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,700;0,800;1,700;1,800;1,900&family=Barlow:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/options.css">
   <script type="importmap">
@@ -44,24 +44,6 @@
         <button id="tRoll" class="tog" aria-pressed="true"><span data-i18n="spin">Rodar</span> <kbd>Espaço</kbd></button>
       </div>
     </section>
-    <section>
-      <h2 data-i18n="race">Corrida</h2>
-      <div class="fields">
-        <label><span data-i18n="mode">Modo</span>
-          <select id="mode"><option value="race" data-i18n="modeRace"></option><option value="tt" data-i18n="modeTT"></option><option value="champ" data-i18n="modeChamp"></option></select></label>
-        <label id="trackRow"><span data-i18n="track">Pista</span>
-          <select id="track"></select></label>
-        <label id="revRow" class="chk"><input type="checkbox" id="rev"> <span data-i18n="reverse">Sentido inverso</span></label>
-        <div class="opts">
-          <label><span data-i18n="laps">Voltas</span>
-            <select id="laps"><option>1</option><option>2</option><option selected>3</option><option>5</option><option>10</option></select></label>
-          <label><span data-i18n="difficulty">Dificuldade</span>
-            <select id="dif"><option value="0.9" data-i18n="easy"></option><option value="1" selected data-i18n="normal"></option><option value="1.08" data-i18n="hard"></option></select></label>
-        </div>
-        <p class="muted2" id="recInfo"></p>
-        <p class="muted2" id="champNote" data-i18n="champNote" hidden></p>
-      </div>
-    </section>
     <div class="ready">
       <a class="btn" href="index.html" data-i18n="back">Voltar</a>
       <button id="opt" class="optbtn" data-i18n="options">Opções</button>
@@ -69,6 +51,7 @@
     </div>
   </aside>
 
+  <div id="player"></div>
   <div id="specs"></div>
   <div id="hint" data-i18n="dragHint">Arraste para girar · roda do mouse para aproximar</div>
   <div id="stats" hidden></div>
@@ -79,32 +62,13 @@
     import { S, t, applyI18n } from './src/settings.js';
     import { openOptions } from './src/optionsUI.js';
     import { initUiAudio } from './src/uiaudio.js';
-    import { TRACKS } from './src/trackBuilder.js';
-    import { newChamp, clearChamp } from './src/championship.js';
-    import { recKey, getRecordTime } from './src/ghost.js';
-    import { fmt } from './src/hud.js';
-    const $ = (id) => document.getElementById(id), KEY = 'race_opts_v1';
-    applyI18n(); initUiAudio();
-    $('track').innerHTML = TRACKS.map((x) => `<option value="${x.id}">${x.name}</option>`).join('');
-    let o = {}; try { o = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
-    for (const [id, k] of [['mode', 'mode'], ['track', 'track'], ['laps', 'laps'], ['dif', 'dif']]) if (o[k] != null) $(id).value = o[k];
-    $('rev').checked = !!o.rev;
-    const carId = () => { try { return (JSON.parse(localStorage.getItem('garage_v1')) || {}).car || 'aventador'; } catch { return 'aventador'; } };
-    function refresh() {
-      const camp = $('mode').value === 'champ';
-      $('track').closest('label').hidden = camp; $('revRow').hidden = camp; $('champNote').hidden = !camp; $('recInfo').hidden = camp;
-      const rt = getRecordTime(recKey(carId(), $('track').value, $('rev').checked));
-      $('recInfo').textContent = t('record') + ': ' + (rt ? fmt(rt) : t('noRecord'));
-    }
-    const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ mode: $('mode').value, track: $('track').value, rev: $('rev').checked, laps: $('laps').value, dif: $('dif').value })); } catch {} refresh(); };
-    for (const id of ['mode', 'track', 'rev', 'laps', 'dif']) $(id).addEventListener('change', save);
-    document.addEventListener('carchange', refresh); addEventListener('optionschange', refresh); refresh();
+    import { initMusic } from './src/music.js';
+    import { mountMiniPlayer, bindMusicKeys } from './src/musicUI.js';
+    const $ = (id) => document.getElementById(id);
+    applyI18n(); initUiAudio(); initMusic('menu'); mountMiniPlayer($('player')); bindMusicKeys();
     $('opt').onclick = openOptions;
-    $('ready').onclick = () => {
-      save(); const m = $('mode').value, laps = $('laps').value, dif = $('dif').value;
-      if (m === 'champ') { clearChamp(); newChamp({ laps: +laps, dif: +dif }); location.href = 'game.html?modo=champ&laps=' + laps + '&dif=' + dif; }
-      else location.href = `game.html?modo=${m}&pista=${$('track').value}&rev=${$('rev').checked ? 1 : 0}&laps=${laps}&dif=${dif}`;
-    };
+    $('ready').onclick = () => { location.href = 'modo.html'; };
+    addEventListener('keydown', (e) => { if (e.code === 'Enter' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'A') $('ready').click(); });
   </script>
 </body>
 </html>
